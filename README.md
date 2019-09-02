@@ -1,2 +1,2 @@
-# nyx_containers
+# NYX Containers
 NYX docker containers
