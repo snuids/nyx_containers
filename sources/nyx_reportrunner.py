@@ -4,6 +4,7 @@ NYX REPORT RUNNER MODULE
 Generates reports and store them in a local directory.
 The jobs are received via the NYX_REPORT_STEP2 queue from the node red workflow.
 Jobs sent by the report scheduler are forwarded to /queue/NYX_REPORT_STEP3 and captured by the report scheduler workflow of node red.
+VME
 
 Sends:
 -------------------------------------
