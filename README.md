@@ -1,4 +1,9 @@
 # NYX Containers
+
+![badge](https://img.shields.io/badge/made%20with-python-blue.svg?style=flat-square)
+![badge](https://img.shields.io/github/languages/code-size/snuids/nyx_containers)
+![badge](https://img.shields.io/github/last-commit/snuids/nyx_containers)
+
 NYX docker containers. This repository contains the code used to build:
 
 * The **nyx_reportrunner** (Used to generate reports)
