@@ -3,6 +3,7 @@ amqstompclient==1.1.12
 arrow==0.13.1
 attrs==19.1.0
 Babel==2.7.0
+cachetools==3.1.1
 certifi==2018.8.24
 chardet==3.0.4
 Click==7.0

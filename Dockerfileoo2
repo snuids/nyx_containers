@@ -28,10 +28,15 @@ RUN pip3 install -r /opt/sources/requirements.txt
 RUN pip3 install sqlalchemy
 RUN pip3 install psycopg2-binary
 
-#RUN apt-get install -y libreoffice
-RUN apt-get install -y libreoffice-core --no-install-recommends
+RUN apt-get update
+RUN apt-get install -y libreoffice
+#RUN apt-get install -y libreoffice-core --no-install-recommends
 
+COPY ./jaspergenerator /opt/sources/jaspergenerator
+COPY ./shellscripts /opt/sources/shellscripts
 COPY ./sources /opt/sources
+
+RUN ls -l /opt/sources
 RUN rm -d -r /opt/sources/logs
 RUN mkdir  /opt/sources/logs
 
