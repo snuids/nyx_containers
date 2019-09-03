@@ -22,13 +22,14 @@ RUN cd /tmp/Python-3.7.2 && make -j 1 && make install
 RUN python3 --version
 RUN pip3 --version
 
-COPY ./requirements.txt /opt/sources/requirements.txt
+COPY ./sources/requirements.txt /opt/sources/requirements.txt
 RUN pip3 install -r /opt/sources/requirements.txt 
 
 RUN pip3 install sqlalchemy
 RUN pip3 install psycopg2-binary
 
-RUN apt-get install -y libreoffice
+#RUN apt-get install -y libreoffice
+RUN apt-get install -y libreoffice-core --no-install-recommends
 
 COPY ./sources /opt/sources
 RUN rm -d -r /opt/sources/logs

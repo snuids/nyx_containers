@@ -20,6 +20,7 @@ VERSION HISTORY
 ===============
 
 * 06 Aug 2019 1.1.0 **AMA** Build with version 1.1.0.0 of opendistro JDBC
+* 03 Sep 2019 1.2.0 **AMA** elastic-helper dependency added
 """
 import json
 import time
@@ -39,7 +40,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 QUEUE=["/queue/NYX_REPORT_STEP2"]
 
 ################################################################################
