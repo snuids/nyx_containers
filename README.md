@@ -4,8 +4,12 @@
 ![badge](https://img.shields.io/github/languages/code-size/snuids/nyx_containers)
 ![badge](https://img.shields.io/github/last-commit/snuids/nyx_containers)
 
-NYX docker containers. This repository contains the code used to build:
+NYX Containers provide the code (via the container skeleton) to build a container that can :
+* Interact with the 2 databases (Read and/or Write), PostgreSQL and Elasticsearch 
+* Consume or Publish messages on the ActiveMQ message broker
+* Interact with the Redis (key/value store) container
 
+NYX docker containers. This repository contains the code used to build:
 * The **nyx_reportrunner** (Used to generate reports)
 * The **nyx_formatconverter** container (Used to convert a file format to another format)
 * The **nyx_reportscheduler** (Used to schedule reports)
