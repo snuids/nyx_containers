@@ -4,19 +4,19 @@ MAINTAINER lapin
 RUN apt-get update
 RUN apt-get install -y vim
 
-COPY ./requirements.txt /opt/sources/requirements.txt
+COPY ./sources/requirements.txt /opt/sources/requirements.txt
 RUN pip install -r /opt/sources/requirements.txt
 
 COPY ./sources /opt/sources
 RUN rm -d -r /opt/sources/logs
 RUN mkdir  /opt/sources/logs
 RUN rm -d -r /opt/sources/*.sh
-RUN rm -d -r /opt/sources/*.bat
-RUN rm -d -r /opt/sources/jaspergenerator
-RUN rm -d -r /opt/sources/reports
+#RUN rm -d -r /opt/sources/*.bat
+#RUN rm -d -r /opt/sources/jaspergenerator
+#RUN rm -d -r /opt/sources/reports
 
 WORKDIR /opt/sources
-#CMD ["python", "nyx_xlsimporter.py"]
+CMD ["python", "nyx_xlsimporter.py"]
 #CMD ["python", "nyx_reportrunner.py"]
 #CMD ["python", "biac_compute_instawork.py"]
 #CMD ["python", "biac_import_instawork.py"]
@@ -37,7 +37,7 @@ WORKDIR /opt/sources
 #CMD ["python", "biac_month_availability.py"]
 #CMD ["python", "biac_lot7_computed.py"]
 #CMD ["python", "biac_lot5_computed.py"]
-CMD ["python", "biac_import_kpi502.py"]
+#CMD ["python", "biac_import_kpi502.py"]
 #CMD ["python", "lass_logis_dbfeeder.py"]
 #CMD ["python", "par_import_coswin.py"]
 #CMD ["python", "biac_import_maximo.py"]

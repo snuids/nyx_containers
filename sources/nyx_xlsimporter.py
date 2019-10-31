@@ -19,7 +19,7 @@ Listens to:
 VERSION HISTORY
 ===============
 
-* XX Xxx 2018 0.0.1 **AMA** First version
+* 25 Oct 2019 0.0.4 **AMA** First version
 """
 import json
 import time
@@ -38,7 +38,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from lib import pandastoelastic as pte
 
 
-VERSION="0.0.1"
+VERSION="0.0.4"
 MODULE="XLS_IMPORTER"
 QUEUE=["FILE_UPLOAD_XLS"]
 
@@ -83,10 +83,15 @@ def messageReceived(destination,message,headers):
             "number_of_replicas": 1
         },
 
+        # 'mappings': {
+        #     'doc': {
+        #         'properties': {
+        #         }}}
+
         'mappings': {
-            'doc': {
+            
                 'properties': {
-                }}}
+                }}
     }
     for index,col in enumerate(xlsdf.columns):
         if(col=="_index"):
@@ -105,7 +110,8 @@ def messageReceived(destination,message,headers):
             finaltype="date"
             
     #    finaltype="keyword"
-        request_body['mappings']['doc']['properties'][col]={'type':finaltype}
+        #request_body['mappings']['doc']['properties'][col]={'type':finaltype}
+        request_body['mappings']['properties'][col]={'type':finaltype}
     #res=es.indices.get(index="nyx_user")
     #res
     for ind in xlsdf["_index"].unique():
