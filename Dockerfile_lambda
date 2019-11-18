@@ -1,0 +1,19 @@
+FROM python:3.7.3-slim
+MAINTAINER lapin
+
+RUN apt-get update
+RUN apt-get install -y vim
+
+COPY ./sources/requirements.txt /opt/sources/requirements.txt
+RUN pip install -r /opt/sources/requirements.txt
+
+COPY ./sources /opt/sources
+RUN rm -d -r /opt/sources/logs
+RUN mkdir  /opt/sources/logs
+RUN rm -d -r /opt/sources/*.sh
+#RUN rm -d -r /opt/sources/*.bat
+#RUN rm -d -r /opt/sources/jaspergenerator
+#RUN rm -d -r /opt/sources/reports
+
+WORKDIR /opt/sources
+CMD ["python", "nyx_lambda.py"]
