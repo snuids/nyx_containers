@@ -1,0 +1,50 @@
+FROM openjdk:11.0.3-jdk
+MAINTAINER snuids
+
+RUN apt-get update
+RUN apt-get install -y vim
+
+RUN java --version
+
+RUN apt-get install -y locales locales-all
+
+RUN apt-get install sqlite3
+RUN apt-get install -y libsqlite3-dev
+
+RUN apt-get install -y python3-tk tk
+
+
+RUN apt install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev wget
+RUN cd /tmp && wget https://www.python.org/ftp/python/3.7.2/Python-3.7.2.tar.xz && tar -xf Python-3.7.2.tar.xz
+RUN cd /tmp/Python-3.7.2 && ls -l && ./configure --enable-optimizations
+RUN cd /tmp/Python-3.7.2 && make -j 1 && make install 
+
+RUN python3 --version
+RUN pip3 --version
+
+COPY ./sources/requirements7.txt /opt/sources/requirements.txt
+RUN pip3 install -r /opt/sources/requirements.txt 
+
+RUN pip3 install sqlalchemy
+RUN pip3 install psycopg2-binary
+
+RUN apt-get update
+RUN apt-get install -y libreoffice
+#RUN apt-get install -y libreoffice-core --no-install-recommends
+
+COPY ./jaspergenerator /opt/sources/jaspergenerator
+COPY ./shellscripts /opt/sources/shellscripts
+COPY ./sources /opt/sources
+
+RUN ls -l /opt/sources
+RUN rm -d -r /opt/sources/logs
+RUN mkdir  /opt/sources/logs
+
+RUN python3 --version
+
+WORKDIR /opt/sources
+
+
+CMD ["python3", "nyx_reportrunner.py"]
+
+
