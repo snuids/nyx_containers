@@ -1,3 +1,15 @@
+"""
+NYX LAMBDA
+====================================
+Runs code stored in notebooks using two triggers:
+- Interval
+- Message received
+
+VERSION HISTORY
+===============
+
+* 27 Nov 2019 1.0.14 **AMA** First version
+"""
 import re
 import json
 import time
@@ -6,6 +18,7 @@ import copy
 import base64
 import platform
 import threading
+import traceback
 import subprocess 
 import os,logging
 import humanfriendly
@@ -19,7 +32,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.0.12"
+VERSION="1.0.14"
 MODULE="NYX_Lambda"
 QUEUE=[]
 
@@ -62,6 +75,10 @@ def messageReceived(destination,message,headers):
                     lamb["return"]=str(ret)
                 except:
                     logger.error("Lambda "+lamb["function"]+" crashed.",exc_info=True)
+                    tb = traceback.format_exc()
+                    for trace in ["TRACE:"+lamb["function"]+":"+_ for _ in tb.split("\n")]:
+                        logger.info(trace)
+
                     lamb["errors"]+=1
                     lamb["return"]="FAILURE"
                 finally:
@@ -242,6 +259,9 @@ def check_intervals_and_cron():
                             lamb["return"]=str(ret)
                         except:
                             logger.error("Lambda "+lamb["function"]+" crashed.",exc_info=True)
+                            tb = traceback.format_exc()
+                            for trace in ["TRACE:"+lamb["function"]+":"+_ for _ in tb.split("\n")]:
+                                logger.info(trace)
                             lamb["errors"]+=1
                             lamb["return"]="FAILURE"
                         finally:
@@ -362,13 +382,14 @@ if __name__ == '__main__':
                     logger.info("Updating lambda stats")
                     upsert={
                         "script" : {
-                            "source": "ctx._source.errors += params.errors;ctx._source.runs += params.runs;ctx._source.lastrun = params.lastrun;ctx._source.return = params.return;",
+                            "source": "ctx._source.errors += params.errors;ctx._source.runs += params.runs;ctx._source.lastrun = params.lastrun;ctx._source.return = params.duration;ctx._source.return = params.duration;",
                             "lang": "painless",
                             "params" : {
                                 "errors" : lamb["errors"],
                                 "runs" : lamb["runs"],
                                 "lastrun" : lamb["lastrun"],
-                                "return" : lamb["return"]
+                                "return" : lamb["return"],
+                                "duration" : lamb["duration"]
                             }
                         }
                     }
