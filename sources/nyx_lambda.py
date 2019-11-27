@@ -1,14 +1,16 @@
 """
 NYX LAMBDA
 ====================================
+
 Runs code stored in notebooks using two triggers:
-- Interval
-- Message received
+
+* Interval
+* Message received
 
 VERSION HISTORY
 ===============
 
-* 27 Nov 2019 1.0.14 **AMA** First version
+* 27 Nov 2019 1.0.15 **AMA** First version
 """
 import re
 import json
@@ -32,7 +34,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.0.14"
+VERSION="1.0.15"
 MODULE="NYX_Lambda"
 QUEUE=[]
 
@@ -382,7 +384,7 @@ if __name__ == '__main__':
                     logger.info("Updating lambda stats")
                     upsert={
                         "script" : {
-                            "source": "ctx._source.errors += params.errors;ctx._source.runs += params.runs;ctx._source.lastrun = params.lastrun;ctx._source.return = params.duration;ctx._source.return = params.duration;",
+                            "source": "ctx._source.errors += params.errors;ctx._source.runs += params.runs;ctx._source.lastrun = params.lastrun;ctx._source.return = params.duration;ctx._source.duration = params.duration;",
                             "lang": "painless",
                             "params" : {
                                 "errors" : lamb["errors"],
