@@ -21,7 +21,7 @@ VERSION HISTORY
 
 * 06 Aug 2019 1.1.0 **AMA** Build with version 1.1.0.0 of opendistro JDBC
 * 03 Sep 2019 1.2.0 **AMA** elastic-helper dependency added
-* 22 Nov 2019 1.3.0 **AMA** Compatible with ES 7. Added notebook reporting.
+* 22 Nov 2019 1.3.1 **AMA** Compatible with ES 7. Added notebook reporting.
 """
 import json
 import time

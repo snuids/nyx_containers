@@ -21,6 +21,9 @@ Modules
 .. automodule:: nyx_xlsimporter
     :members:
 
+.. automodule:: nyx_lambda
+    :members:
+
 
 .. toctree::
    :maxdepth: 2
