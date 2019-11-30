@@ -34,13 +34,21 @@ RUN apt-get install -y libreoffice
 
 COPY ./jaspergenerator /opt/sources/jaspergenerator
 COPY ./shellscripts /opt/sources/shellscripts
-COPY ./sources /opt/sources
 
+RUN mkdir installoo
+WORKDIR /opt/sources/installoo
+RUN wget https://tdf.mirror.liteserver.nl/libreoffice/stable/6.3.3/deb/x86_64/LibreOffice_6.3.3_Linux_x86-64_deb.tar.gz
+
+RUN gunzip *.gz
+RUN tar -xvf *.tar
+WORKDIR /opt/sources/installoo/LibreOffice_6.3.3.2_Linux_x86-64_deb/DEBS
+
+RUN dpkg -i *.deb
+
+COPY ./sources /opt/sources
 RUN ls -l /opt/sources
 RUN rm -d -r /opt/sources/logs
 RUN mkdir  /opt/sources/logs
-
-RUN python3 --version
 
 WORKDIR /opt/sources
 
