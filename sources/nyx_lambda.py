@@ -10,7 +10,8 @@ Runs code stored in notebooks using two triggers:
 VERSION HISTORY
 ===============
 
-* 27 Nov 2019 1.0.15 **AMA** First version
+* 27 Nov 2019 1.0.16 **AMA** First version
+* 30 Nov 2019 1.0.17 **AMA** Common Section added
 """
 import re
 import json
@@ -34,7 +35,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.0.15"
+VERSION="1.0.17"
 MODULE="NYX_Lambda"
 QUEUE=[]
 
@@ -46,6 +47,7 @@ thread_check_intervals = None
 intervalfn_lock = threading.RLock()
 
 elkversion=6
+logs=[]
 
 ################################################################################
 def getELKVersion(es):
@@ -54,7 +56,7 @@ def getELKVersion(es):
 
 ################################################################################
 def messageReceived(destination,message,headers):
-    global es,global_message,global_destination,global_headers
+    global es,global_message,global_destination,global_headers,logs
 
     logger.info("==> "*10)
     logger.info("Message Received %s" % destination)
@@ -69,26 +71,62 @@ def messageReceived(destination,message,headers):
 
         if destination in lambdasht:
             for lamb in lambdasht[destination]:
-                logger.info(">>> Calling %s" %(lamb["function"]))
+                logs=[]
+                logger_info(">>> Calling %s" %(lamb["function"]))
                 lamb["lastrun"]=datetime.utcnow().isoformat()
                 starttime=datetime.utcnow()
                 try:
                     ret=lamb["code"]()
                     lamb["return"]=str(ret)
                 except:
-                    logger.error("Lambda "+lamb["function"]+" crashed.",exc_info=True)
+                    logger_error("Lambda "+lamb["function"]+" crashed.",exc_info=True)
                     tb = traceback.format_exc()
                     for trace in ["TRACE:"+lamb["function"]+":"+_ for _ in tb.split("\n")]:
-                        logger.info(trace)
+                        logger_info(trace)
 
                     lamb["errors"]+=1
                     lamb["return"]="FAILURE"
                 finally:
+                    lamb["logs"]=json.dumps(logs)
                     lamb["runs"]+=1
                     duration=(datetime.utcnow()-starttime).total_seconds()*1000
                     lamb["duration"]=duration
 
 
+
+################################################################################
+def logger_info(log,exc_info=False):
+    logger.info(log,exc_info=exc_info)
+    logs.append("%s\tINFO\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+
+def logger_error(log,exc_info=False):
+    logger.error(log,exc_info=exc_info)
+    logs.append("%s\tERROR\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+
+def logger_debug(log,exc_info=False):
+    logger.debug(log,exc_info=exc_info)
+    logs.append("%s\tDEBUG\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+
+def logger_warn(log,exc_info=False):
+    logger.warn(log,exc_info=exc_info)
+    logs.append("%s\tWARN\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+
+def logger_fatal(log,exc_info=False):
+    logger.fatal(log,exc_info=exc_info)
+    logs.append("%s\tINFO\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+
+################################################################################
+def computeNewCode(newcode,common):
+    if len(common)>0:
+        common2="".join(["    "+_+"\n" for _ in common.split("\n")])
+    else:
+        return newcode.replace("logger.","logger_")
+
+    startdef=newcode.find("\ndef ")
+    enddef=newcode.find("):",startdef)
+    if enddef>=0:
+        newcode2=newcode[0:enddef+3]+common2+newcode[enddef+3:]
+    return newcode2.replace("logger.","logger_")
 
 ################################################################################
 def loadConfig():
@@ -99,6 +137,8 @@ def loadConfig():
     lambdas=[]
     lambdasht={}
     files=[]
+    common=""
+    
     regex_fn = r'(^ *)def (\w+)\(.*?\):'
 
     for r, d, f in os.walk(path):
@@ -106,26 +146,31 @@ def loadConfig():
             if '.ipynb' in file and not 'checkpoint' in file:
                 files.append(os.path.join(r, file))
 
+# LOAD COMMON
     for f in files:
         with open(f, 'r') as content_file:
-            print(f)
             content = content_file.read()
             jsoncontent=json.loads(content)
             for cell in jsoncontent["cells"]:
 
-                print(cell)
+                if cell["cell_type"]=="code":
+                    cell['source'] = [_ for _ in cell['source'] if _ != '\n']                    
+                    interval = 0
+                    topics = []
+                    
+                    if len(cell['source']) > 1:                        
+                        if "#@COMMON" in  cell['source'][0]:
+                            common+="".join(cell["source"])
+
+# LOAD FUNCTIONS
+    for f in files:
+        with open(f, 'r') as content_file:
+            content = content_file.read()
+            jsoncontent=json.loads(content)
+            for cell in jsoncontent["cells"]:
 
                 if cell["cell_type"]=="code":
-
-                    cell['source'] = [_ for _ in cell['source'] if _ != '\n']
-
-                    # if len(cell["source"])>1 and "#@LISTEN=" in cell["source"][0] and "#@CALLBACK=" in cell["source"][1]:
-                    #     topics= cell["source"][0][9:].strip().split(",")
-                    #     function= cell["source"][1][11:].strip()                    
-                    #     newcode="".join(cell["source"])
-                    #     exec(newcode)
-                    #     lambdas.append({"file":f,"topics":topics,"runs":0,"errors":0,"function":function,"code":eval(function)})
-
+                    cell['source'] = [_ for _ in cell['source'] if _ != '\n']                    
                     interval = 0
                     topics = []
                     
@@ -150,10 +195,11 @@ def loadConfig():
 
                         if function is not None:
                             newcode="".join(cell["source"])
+                            newcode=computeNewCode(newcode,common)
                             exec(newcode)
                             lambdas.append({"file":f,"topics":topics,"interval":interval,"runs":0,"errors":0,"function":function,"code":eval(function)})
     
-    logger.info(lambdas)
+    #logger.info(lambdas)
 
     for lamb in lambdas:
         for topic in lamb["topics"]:
@@ -168,27 +214,33 @@ def checkIfRequirementsChanged():
 
     curf=path+'/requirements.txt'
     prevf=path+'/requirements.txt.prev'
+    if os.path.isfile('./firstrun.txt'):
 
-    if not os.path.isfile(curf):
-        return False
-    
-    if not os.path.isfile(prevf):
-        copyfile(curf,prevf)
-    
-    elif requirementstime==0:
-        
-        with open(curf, 'r') as content_file:            
-            contentcur = content_file.read()
-
-        with open(prevf, 'r') as content_file:            
-            contentprev = content_file.read()
-
-        if contentcur==contentprev:
-            requirementstime=os.path.getmtime(curf)
+        if not os.path.isfile(curf):
             return False
+        
+        if not os.path.isfile(prevf):
+            copyfile(curf,prevf)
+        
+        elif requirementstime==0:
+            
+            with open(curf, 'r') as content_file:            
+                contentcur = content_file.read()
 
-    elif os.path.getmtime(curf)==requirementstime:
-        return False
+            with open(prevf, 'r') as content_file:            
+                contentprev = content_file.read()
+
+            if contentcur==contentprev:
+                requirementstime=os.path.getmtime(curf)
+                return False
+
+        elif os.path.getmtime(curf)==requirementstime:
+            return False
+    else:
+        logger.info("FIRST RUN")
+        f = open("firstrun.txt", "a")
+        f.write("FIRST RUN")
+        f.close()
     
     logger.info("Must install requirements...")
     copyfile(curf,prevf)
@@ -230,7 +282,7 @@ def checkIfChanged(inconfig):
 
 ################################################################################
 def check_intervals_and_cron():
-    global thread_check_intervals, lambdas
+    global thread_check_intervals, lambdas,logs
 
     while thread_check_intervals:
         # logger.info('check_intervals_and_cron')
@@ -252,7 +304,8 @@ def check_intervals_and_cron():
                     logger.info('RUN: '+ lamb['function'] +' - interval: '+str(lamb['interval']))
                     with intervalfn_lock:
                         logger.info("<== "*10)
-
+                        logs=[]
+                        logger_info(">>> Calling %s" %(lamb["function"]))
                         lamb['nextrun'] += timedelta(seconds=lamb['interval'])
                         lamb["lastrun"]=starttime.isoformat()
 
@@ -260,18 +313,19 @@ def check_intervals_and_cron():
                             ret=lamb["code"]()
                             lamb["return"]=str(ret)
                         except:
-                            logger.error("Lambda "+lamb["function"]+" crashed.",exc_info=True)
+                            logger_error("Lambda "+lamb["function"]+" crashed.",exc_info=True)
                             tb = traceback.format_exc()
                             for trace in ["TRACE:"+lamb["function"]+":"+_ for _ in tb.split("\n")]:
-                                logger.info(trace)
+                                logger_info(trace)
                             lamb["errors"]+=1
                             lamb["return"]="FAILURE"
                         finally:
+                            lamb["logs"]=json.dumps(logs)
                             lamb["runs"]+=1
                             duration=(datetime.utcnow()-starttime).total_seconds()*1000
                             lamb["duration"]=duration
  
-        time.sleep(5)
+        time.sleep(1)
 
 
 logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(module)s - %(funcName)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
@@ -316,7 +370,6 @@ if __name__ == '__main__':
     #>> AMQC
     server={"ip":os.environ["AMQC_URL"],"port":os.environ["AMQC_PORT"]
                     ,"login":os.environ["AMQC_LOGIN"],"password":os.environ["AMQC_PASSWORD"]}
-    logger.info(server)                
     conn=amqstompclient.AMQClient(server
         , {"name":MODULE,"version":VERSION,"lifesign":"/topic/NYX_MODULE_INFO","heartbeats":(120000,120000),"earlyack":True},QUEUE,callback=messageReceived)
     
@@ -384,14 +437,15 @@ if __name__ == '__main__':
                     logger.info("Updating lambda stats")
                     upsert={
                         "script" : {
-                            "source": "ctx._source.errors += params.errors;ctx._source.runs += params.runs;ctx._source.lastrun = params.lastrun;ctx._source.return = params.duration;ctx._source.duration = params.duration;",
+                            "source": "ctx._source.errors += params.errors;ctx._source.runs += params.runs;ctx._source.lastrun = params.lastrun;ctx._source.return = params.return;ctx._source.duration = params.duration;ctx._source.logs = params.logs;",
                             "lang": "painless",
                             "params" : {
                                 "errors" : lamb["errors"],
                                 "runs" : lamb["runs"],
                                 "lastrun" : lamb["lastrun"],
                                 "return" : lamb["return"],
-                                "duration" : lamb["duration"]
+                                "duration" : lamb["duration"],
+                                "logs" : lamb["logs"]
                             }
                         }
                     }

@@ -22,6 +22,7 @@ VERSION HISTORY
 * 06 Aug 2019 1.1.0 **AMA** Build with version 1.1.0.0 of opendistro JDBC
 * 03 Sep 2019 1.2.0 **AMA** elastic-helper dependency added
 * 22 Nov 2019 1.3.1 **AMA** Compatible with ES 7. Added notebook reporting.
+* 28 Nov 2019 1.4.0 **AMA** Packaged with libre office 6.3
 """
 import json
 import time
@@ -41,7 +42,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 
 
-VERSION="1.3.1"
+VERSION="1.4.0"
 QUEUE=["/queue/NYX_REPORT_STEP2"]
 
 ################################################################################
