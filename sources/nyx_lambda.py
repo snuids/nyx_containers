@@ -29,6 +29,7 @@ from functools import wraps
 from shutil import copyfile
 from datetime import datetime
 from datetime import timedelta
+from datetime import datetime, timezone
 from amqstompclient import amqstompclient
 from logging.handlers import TimedRotatingFileHandler
 from logstash_async.handler import AsynchronousLogstashHandler
@@ -73,8 +74,8 @@ def messageReceived(destination,message,headers):
             for lamb in lambdasht[destination]:
                 logs=[]
                 logger_info(">>> Calling %s" %(lamb["function"]))
-                lamb["lastrun"]=datetime.utcnow().isoformat()
-                starttime=datetime.utcnow()
+                lamb["lastrun"]=datetime.now(timezone.utc).isoformat()
+                starttime=datetime.now(timezone.utc)
                 try:
                     ret=lamb["code"]()
                     lamb["return"]=str(ret)
@@ -89,8 +90,8 @@ def messageReceived(destination,message,headers):
                 finally:
                     lamb["logs"]=json.dumps(logs)
                     lamb["runs"]+=1
-                    duration=(datetime.utcnow()-starttime).total_seconds()*1000
-                    lamb["duration"]=duration
+                    duration=(datetime.now(timezone.utc)-starttime).total_seconds()*1000
+                    lamb["duration"]=round(duration,2)
 
 
 
@@ -291,7 +292,7 @@ def check_intervals_and_cron():
             # logger.info(lamb)
 
             if 'interval' in lamb and lamb['interval'] > 0:
-                starttime=datetime.utcnow()
+                starttime=datetime.now(timezone.utc)
                 
                 if 'nextrun' not in lamb:
                     lamb['nextrun'] = starttime
@@ -322,8 +323,8 @@ def check_intervals_and_cron():
                         finally:
                             lamb["logs"]=json.dumps(logs)
                             lamb["runs"]+=1
-                            duration=(datetime.utcnow()-starttime).total_seconds()*1000
-                            lamb["duration"]=duration
+                            duration=(datetime.now(timezone.utc)-starttime).total_seconds()*1000
+                            lamb["duration"]=round(duration,2)
  
         time.sleep(1)
 

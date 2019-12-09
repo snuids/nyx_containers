@@ -23,6 +23,7 @@ VERSION HISTORY
 * 03 Sep 2019 1.2.0 **AMA** elastic-helper dependency added
 * 22 Nov 2019 1.3.1 **AMA** Compatible with ES 7. Added notebook reporting.
 * 28 Nov 2019 1.4.0 **AMA** Packaged with libre office 6.3
+* 02 Dec 2019 1.5.0 **AMA** Pandas updated to 0.24.1
 """
 import json
 import time
@@ -42,7 +43,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 
 
-VERSION="1.4.0"
+VERSION="1.5.0"
 QUEUE=["/queue/NYX_REPORT_STEP2"]
 
 ################################################################################
