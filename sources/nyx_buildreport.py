@@ -3,7 +3,9 @@ import os
 import re
 import sys
 import json
+import logging
 import datetime
+import traceback
 import cachetools
 import matplotlib
 import collections
@@ -11,11 +13,26 @@ import numpy as np
 import pandas as pd
 matplotlib.use('TkAgg')
 from docx import Document
+from datetime import timezone
 from docx.shared import Inches
 import matplotlib.pyplot as plt
 from dateutil.parser import parse
 from elastic_helper import es_helper
 from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
+
+logging.basicConfig()
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+#######################################################################################
+# save_log
+#######################################################################################
+def save_log():
+    logger.info("Saving log")
+    body={"@timestamp":datetime.datetime.now().isoformat(),"logs":logs}
+    es.index("nyx_reportlog",id=report["id"],doc_type="doc",body=body)
+    logger.info("Saved")
+
 
 #######################################################################################
 # move_table_after
@@ -69,7 +86,8 @@ def replaceText(replacementHT,text):
 # Start
 #######################################################################################
 
-print("Starting v0.1")
+print("Starting v0.2")
+print(datetime.datetime.now(timezone.utc).isoformat())
 localmode=False
 try:
     os.environ["LOCAL_MODE"]
@@ -82,6 +100,8 @@ try:
 except:
     report={"id": "id_19485666_27963523", "creds": {"token": "933921e1-58ae-4948-a941-037e9ce2e915", "user": {"filters": [], "firstname": "Arnaud", "id": "amarchand@icloud.com", "language": "en", "lastname": "Marchand", "login": "amarchand", "password": "", "phone": "0033497441962", "privileges": ["admin"], "user": "amarchand@icloud.com"}}, "report": {"description": "My First Report", "exec": "report1", "generatePDF": True, "icon": "file", "output": ["txt", "pdf"], "parameters": [{"name": "param1", "title": "Param1", "type": "text", "value": "test"}, {"name": "param2", "title": "Param2", "type": "interval", "value": ["2019-11-20T23:00:00.000Z", "2019-11-21T23:00:00.000Z"]}], "privileges": [], "reportType": "python", "title": "My First Report"}, "privileges": ["admin"], "treatment": {"status": "Waiting", "creation": "2019-11-22T08:24:03.288Z", "start": "2019-11-22T09:24:03.293651"}, "@timestamp": "2019-11-22T08:24:03.288Z", "output": "/opt/sources/generated/id_19485666_27963523"}
 
+
+logs=[]
 print("==== Args")
 print(report)
 print("==== Args")
@@ -96,10 +116,7 @@ for param in report["report"]["parameters"]:
     else:
         params[param["name"]]=param["value"]
 
-if not localmode:
-    prepath = "./reports/notebooks/"
-else:
-    prepath = "./reports/notebooks/"
+prepath = "./reports/notebooks/"
 
 # ELASTIC SEARCH
 
@@ -114,24 +131,14 @@ else:
     es = ES([host_params], connection_class=RC, http_auth=(os.environ["ELK_LOGIN"], os.environ["ELK_PASSWORD"]),  use_ssl=True ,verify_certs=False)
     print(es.info())
 
-docpath=prepath+report["report"]["notebook"]+".docx"
 ipynbpath=prepath+report["report"]["notebook"]+".ipynb"
 
-# DOCS
-
-if os.path.isfile(docpath) :
-    print("DOC (%s) found." %(docpath))
-else:
-    print("ERROR DOC (%s) found." %(docpath))
-    sys.exit(1) 
-
-template = Document(docpath)
 
 # PYTHON
 if os.path.isfile(ipynbpath) :
-    print("IPYNB (%s) found." %(docpath))
+    print("IPYNB (%s) found." %(ipynbpath))
 else:
-    print("ERROR IPYNB (%s) found." %(docpath))
+    print("ERROR IPYNB (%s) found." %(ipynbpath))
     sys.exit(1) 
 
 
@@ -139,7 +146,28 @@ else:
 replacementHT={}
 replacementHT.update(params)
 
-# READ notebook
+################################################################################
+def logger_info(log,exc_info=False):
+    logger.info(log,exc_info=exc_info)
+    logs.append("%s\tINFO\t%s" %(datetime.datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+
+def logger_error(log,exc_info=False):
+    logger.error(log,exc_info=exc_info)
+    logs.append("%s\tERROR\t%s" %(datetime.datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+
+def logger_debug(log,exc_info=False):
+    logger.debug(log,exc_info=exc_info)
+    logs.append("%s\tDEBUG\t%s" %(datetime.datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+
+def logger_warn(log,exc_info=False):
+    logger.warn(log,exc_info=exc_info)
+    logs.append("%s\tWARN\t%s" %(datetime.datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+
+def logger_fatal(log,exc_info=False):
+    logger.fatal(log,exc_info=exc_info)
+    logs.append("%s\tINFO\t%s" %(datetime.datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+def computeNewCode(newcode):
+    return newcode.replace("logger.","logger_")
 
 reportfunctions={}
 
@@ -150,43 +178,19 @@ with open(ipynbpath, 'r') as content_file:
         if cell["cell_type"]=="code":
             if len(cell["source"])>0 and "#@ONLOAD" in cell["source"][0]:
                 newcode="".join(cell["source"])
-                exec(newcode)
+                try:
+                    exec(computeNewCode(newcode))
+                except:
+                    logger_error("Common part crashed.",exc_info=True)
+                    tb = traceback.format_exc()
+                    for trace in ["TRACE:"+_ for _ in tb.split("\n")]:
+                        logger_info(trace)
+                    save_log()
+                    raise Exception("ERROR COMMON")
             if len(cell["source"])>0 and "#@PARAGRAPH=" in cell["source"][0]:
                 newcode="".join(cell["source"])
-                reportfunctions["${"+cell["source"][0].replace("#@PARAGRAPH=","").strip()+"}"]=newcode
+                reportfunctions["${"+cell["source"][0].replace("#@PARAGRAPH=","").strip()+"}"]=computeNewCode(newcode)
             
 
-# FILL table cells
-pattern = r"\${.*}"
 
-for table in template.tables:
-    for row in table.rows:
-        for cell in row.cells:
-            for paragraph in cell.paragraphs:                            
-                if re.search(pattern, paragraph.text):  
-                    match= re.search(pattern, paragraph.text).group(0)
-                    print(">>>>> FOUND CELL :%s" %(match))  
-                    if match in reportfunctions:
-                        paragraph.text=paragraph.text.replace(match,"")
-                        exec(reportfunctions[match])
-                    else:
-                        paragraph.text=replaceText(replacementHT,paragraph.text)                   
-
-# Fill paragraphs
-
-for paragraph in template.paragraphs:     
-    if re.search(pattern, paragraph.text):                
-        match= re.search(pattern, paragraph.text).group(0)
-        print(">>>>> FOUND PARAGRAPH :%s" %(match))                    
-        paragraph.text=replaceText(replacementHT,paragraph.text)        
-        if match in reportfunctions:
-            paragraph.text=paragraph.text.replace(match,"")
-            exec(reportfunctions[match])
-
-# SAVE REPORT
-
-if not localmode:
-    template.save(report["output"]+".docx")
-else:
-    print('----save file in notebook mode----')
-    template.save("notebook.docx")
+save_log()

@@ -24,6 +24,9 @@ VERSION HISTORY
 * 22 Nov 2019 1.3.1 **AMA** Compatible with ES 7. Added notebook reporting.
 * 28 Nov 2019 1.4.0 **AMA** Packaged with libre office 6.3
 * 02 Dec 2019 1.5.0 **AMA** Pandas updated to 0.24.1
+* 13 Jan 2020 1.5.1 **AMA** Notebook builder updated
+* 22 Jan 2020 1.6.0 **AMA** Simple notebook mode added
+* 04 Feb 2020 1.6.3 **AMA** Better nyx_build_report file
 """
 import json
 import time
@@ -43,7 +46,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 
 
-VERSION="1.5.0"
+VERSION="1.6.3"
 QUEUE=["/queue/NYX_REPORT_STEP2"]
 
 ################################################################################
@@ -107,6 +110,13 @@ def messageReceived(destination,message,headers):
             status="Error"
             errormessage="exec not defined"
         elif reporttype=="notebook":
+            noteb="./reports/notebooks/"+messagejson["report"]["notebook"]+".ipynb"
+            logger.info("Checkin path:"+noteb)
+            if not os.path.exists(noteb):
+                logger.error("Notebook file "+noteb+" does not exist.")
+                status="Error"
+                errormessage="Notebook file "+noteb+" does not exist."
+        elif reporttype=="notebook_doc":
             word="./reports/notebooks/"+messagejson["report"]["notebook"]+".docx"
             logger.info("Checkin path:"+word)
             if not os.path.exists(word):
@@ -169,6 +179,19 @@ def messageReceived(destination,message,headers):
                 logger.info(line)
             logger.info("Java Return Code:")
             logger.info(ret.returncode)
+        elif reporttype=="notebook_doc":            
+            path="."
+            logger.info("PATH="+path)
+            ret=subprocess.Popen(["python3","nyx_buildreport_doc.py",json.dumps(messagejson)],cwd=path, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            #ret=subprocess.Popen([exec.split('/')[-1:][0]],cwd=path, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            stdout = ret.communicate()[0]
+            for line in stdout.decode("utf-8").split('\n'):
+                logger.info(line)
+            logger.info("Shell Return Code:")
+            logger.info(ret.returncode)
+            if ret.returncode !=0:
+                status="Error"
+                errormessage="Python file "+"nyx_buildreport_doc.py"+" crashed. Return code="+str(ret.returncode)
         elif reporttype=="notebook":            
             path="."
             logger.info("PATH="+path)
@@ -181,7 +204,7 @@ def messageReceived(destination,message,headers):
             logger.info(ret.returncode)
             if ret.returncode !=0:
                 status="Error"
-                errormessage="Python file "+"nyx_buildreport.py"+" crashed. Return code="+str(ret.returncode)
+                errormessage="Python file "+"nyx_buildreport.py"+" crashed. Return code="+str(ret.returncode)            
         else:
             path='/'.join(exec.split('/')[0:-1])
             logger.info("PATH="+path)

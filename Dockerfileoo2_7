@@ -29,25 +29,26 @@ RUN apt-get install -y libreoffice
 
 
 RUN mkdir installoo
+
 WORKDIR /opt/sources/installoo
-RUN wget https://tdf.mirror.liteserver.nl/libreoffice/stable/6.3.3/deb/x86_64/LibreOffice_6.3.3_Linux_x86-64_deb.tar.gz
+RUN wget https://tdf.mirror.liteserver.nl/libreoffice/stable/6.3.4/deb/x86_64/LibreOffice_6.3.4_Linux_x86-64_deb.tar.gz
 
 RUN gunzip *.gz
 RUN tar -xvf *.tar
-WORKDIR /opt/sources/installoo/LibreOffice_6.3.3.2_Linux_x86-64_deb/DEBS
+WORKDIR /opt/sources/installoo/LibreOffice_6.3.4.2_Linux_x86-64_deb/DEBS
 
 RUN dpkg -i *.deb
 
 COPY ./jaspergenerator /opt/sources/jaspergenerator
 COPY ./shellscripts /opt/sources/shellscripts
 
-
-COPY ./sources /opt/sources
-COPY ./sources/requirements7.txt /opt/sources/requirements.txt
-
-RUN pip3 install -r /opt/sources/requirements.txt 
+COPY ./sources/requirements.txt /opt/sources/requirements.txt
 RUN pip3 install sqlalchemy
 RUN pip3 install psycopg2-binary
+RUN pip3 install -r /opt/sources/requirements.txt 
+
+
+COPY ./sources /opt/sources
 
 
 RUN ls -l /opt/sources
