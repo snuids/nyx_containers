@@ -10,7 +10,7 @@ Click==7.0
 cycler==0.10.0
 docopt==0.6.2
 docutils==0.14
-elastic-helper==1.1.4
+elastic-helper==1.2.0
 elasticsearch==7.1.0
 Flask==1.0.2
 Flask-Cors==3.0.7
