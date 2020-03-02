@@ -93,7 +93,6 @@ def create_table( inpara,df, style=None,col_width=None):
         row_cells = table_cells[i*df.shape[1]:(i+1)*df.shape[1]]
 
         if i==0:
-
             for idx, col in enumerate(df.columns):
                 row_cells[idx].text = col
         else:

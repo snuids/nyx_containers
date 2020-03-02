@@ -26,7 +26,8 @@ VERSION HISTORY
 * 02 Dec 2019 1.5.0 **AMA** Pandas updated to 0.24.1
 * 13 Jan 2020 1.5.1 **AMA** Notebook builder updated
 * 22 Jan 2020 1.6.0 **AMA** Simple notebook mode added
-* 04 Feb 2020 1.6.3 **AMA** Better nyx_build_report file
+* 04 Feb 2020 1.6.4 **AMA** Better nyx_build_report file
+* 11 Feb 2020 1.6.5 **AMA** Built with latest eshelper 1.2.0
 """
 import json
 import time
@@ -46,7 +47,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 
 
-VERSION="1.6.3"
+VERSION="1.6.5"
 QUEUE=["/queue/NYX_REPORT_STEP2"]
 
 ################################################################################
