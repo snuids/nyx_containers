@@ -18,7 +18,9 @@ VERSION HISTORY
 * 24 Feb 2020 1.3.3  **AMA** Better compile error log
 * 25 Feb 2020 1.3.4  **AMA** Success green icon changed to green
 * 26 Feb 2020 1.3.23 **AMA** Input saved + lambda commands
-* 02 Mar 2020 1.3.25 **AMA** Fixed outputs
+* 02 Mar 2020 1.3.27 **AMA** Fixed outputs
+* 03 Mar 2020 1.3.30 **AMA** Fixed restart issues
+* 09 Mar 2020 1.3.31 **AMA** CRON keyword added
 """
 import re
 import json
@@ -36,6 +38,7 @@ import os,logging
 import humanfriendly
 import dateutil.parser
 from functools import wraps
+from crontab import CronTab
 from shutil import copyfile
 from datetime import datetime
 from datetime import timedelta
@@ -46,7 +49,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.3.25"
+VERSION="1.3.31"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
@@ -126,7 +129,7 @@ def createNotebook(nbname,functionname,nbtype,nbparameter):
         "cell_type": "code",
         "metadata": {},
         "outputs": [],
-        "execution_count": null,
+        "execution_count": None,
         "source": headersource
         })
 
@@ -167,13 +170,13 @@ def createNotebook(nbname,functionname,nbtype,nbparameter):
            "cell_type": "code",
            "metadata": {},
            "outputs": [],
-           "execution_count": null,
+           "execution_count": None,
            "source": headerfunctionsource
           })
         
     elif nbtype=="cron":
         headerfunction=["## Functions\n"
-                        ,"Event based function(**#@CRON=DURATION+UNIT** tag) Where **DURATION** is number or topic and **UNIT** is one of the following.\n"
+                        ,"Event based function(**#@INTERVAL=DURATION+UNIT** tag) Where **DURATION** is number or topic and **UNIT** is one of the following.\n"
                         ,"- **s** for seconds.\n"
                         ,"- **m** for minutes.\n"                        
                         ,"- **h** for hours.\n"   
@@ -212,7 +215,7 @@ def createNotebook(nbname,functionname,nbtype,nbparameter):
            "cell_type": "code",
            "metadata": {},
            "outputs": [],
-           "execution_count": null,
+           "execution_count": None,
            "source": headerfunctionsource
           })
         
@@ -434,17 +437,33 @@ def loadConfig():
                 if cell["cell_type"]=="code":
                     cell['source'] = [_ for _ in cell['source'] if _ != '\n']                    
                     interval = 0
+                    crontab=None
                     topics = []
+
                     
                     if len(cell['source']) > 1:
                         if "#@LISTEN=" in  cell['source'][0]:
                             topics = cell["source"][0][9:].strip().split(",")
 
                         elif "#@CRON=" in  cell['source'][0]:
+                            logger.info("Decoding CRON:<"+cell["source"][0][7:].strip()+">")
+                            try:   
+
+                                crontab=CronTab(cell["source"][0][7:].strip())
+                            except:                                
+                                logger.error("Unable to decode cron.")
+                                logger.info(cell["source"][0])
+                                continue
+
                             pass
 
-                        elif "#@INTERVAL=" in  cell['"source"'][0]:
-                            interval = humanfriendly.parse_timespan(cell["source"][0][11:].strip())
+                        elif "#@INTERVAL=" in  cell['source'][0]:
+                            try:                            
+                                interval = humanfriendly.parse_timespan(cell["source"][0][11:].strip())
+                            except:                                
+                                logger.error("Unable to decode interval.")
+                                logger.info(cell["source"][0])
+                                continue                                
                         else:
                             continue
                             
@@ -460,7 +479,7 @@ def loadConfig():
                             newcode,realfunction=computeNewCode(f,newcode,common.get(f,""))
                             try:
                                 exec(newcode)
-                                lambdas.append({"runner":str(os.environ["RUNNER"]),"file":f.replace(path+"/",""),"topics":topics,"interval":interval,"runs":0,"errors":0,"orgfunction":function
+                                lambdas.append({"runner":str(os.environ["RUNNER"]),"file":f.replace(path+"/",""),"topics":topics,"crontab":crontab,"interval":interval,"runs":0,"errors":0,"orgfunction":function
                                                 ,"function":realfunction,"code":eval(realfunction)})
                             except:
                                 tb = traceback.format_exc()
@@ -508,14 +527,18 @@ def loadConfig():
     
     for lamb in lambdas:
 
-        redtime=redisserver.get("lambda_"+str(os.environ["RUNNER"])+"_"+lamb["function"]+"_nextrun")
-        if redtime!=None:
-            
-            lamb["nextrun"]=dateutil.parser.parse(redtime.decode("ascii"))
-            if lamb["nextrun"]<datetime.now(timezone.utc):
-                lamb["nextrun"]=datetime.now(timezone.utc)
+        if lamb["file"] in lambdaschanged:
+            logger.info("Function changed %s, do not restore next run." %(lamb["function"]))
+        else: # restore time                         
+            redtime=redisserver.get("lambda_"+str(os.environ["RUNNER"])+"_"+lamb["function"]+"_nextrun")
+            if 'crontab' in lamb and lamb['crontab']!=None:
+                logger.info("Ignoring crontab.")
+            elif redtime!=None:                
+                lamb["nextrun"]=dateutil.parser.parse(redtime.decode("ascii"))
+                if lamb["nextrun"]<datetime.now(timezone.utc):
+                    lamb["nextrun"]=datetime.now(timezone.utc)
 
-            logger.info("Restoring next run to:%s" %(lamb["nextrun"]))
+                logger.info("Restoring next run to:%s" %(lamb["nextrun"]))
 
     pass
 
@@ -576,14 +599,23 @@ def checkIfRequirementsChanged():
 
 ################################################################################
 def checkIfChanged(inconfig):
-    global curconfig,path
+    global curconfig,path,lambdaschanged
     
     fileasstr=""
+    lambdaschanged={}
     # r=root, d=directories, f = files
     for r, d, f in os.walk(path):
         for file in f:
-            if '.ipynb' in file and not 'checkpoint' in file:
-                fileasstr+=os.path.join(r, file)+","+str(os.path.getmtime(path))
+            if '.ipynb' in file and not 'checkpoint' in file and not '.swp' in file:
+                cleanp=os.path.join(r, file).replace("/","_").replace(".","_")
+
+                old=redisserver.get("file_"+cleanp)
+                curt=str(os.path.getmtime(os.path.join(r, file)))
+                fileasstr+=os.path.join(r, file)+","+curt
+                if old!=None and old.decode("ascii") != curt:
+                    logger.info(">>>>>>>>>> File %s changed." %file)
+                    lambdaschanged[file]=True
+                redisserver.set("file_"+cleanp,curt,86400*30)
 
     if fileasstr==curconfig:
         return False
@@ -604,11 +636,15 @@ def check_intervals_and_cron():
         for lamb in lambdas:
             # logger.info(lamb)
 
-            if 'interval' in lamb and lamb['interval'] > 0:
+            if ('interval' in lamb and lamb['interval'] > 0) or ('crontab' in lamb and lamb['crontab']!=None):
                 starttime=datetime.now(timezone.utc)
                 
                 if 'nextrun' not in lamb:
-                    lamb['nextrun'] = starttime
+
+                    if 'crontab' in lamb and lamb['crontab']!=None:
+                        lamb['nextrun'] = datetime.now(timezone.utc)+timedelta(seconds=lamb['crontab'].next(default_utc=True))
+                    else:
+                        lamb['nextrun'] = starttime
 
 
                 if lamb['nextrun'] <= starttime:
@@ -620,9 +656,11 @@ def check_intervals_and_cron():
                         logger.info("<== "*10)
                         logs=[]
                         logger_info(">>> Calling %s" %(lamb["function"]))
-                        lamb['nextrun'] += timedelta(seconds=lamb['interval'])
-
-                        redisserver.set("lambda_"+str(os.environ["RUNNER"])+"_"+lamb["function"]+"_nextrun",lamb['nextrun'].isoformat(),86400)
+                        if 'crontab' in lamb and lamb['crontab']!=None:
+                            lamb['nextrun'] = datetime.now(timezone.utc)+timedelta(seconds=lamb['crontab'].next(default_utc=True))
+                        else:
+                            lamb['nextrun'] += timedelta(seconds=lamb['interval'])
+                            redisserver.set("lambda_"+str(os.environ["RUNNER"])+"_"+lamb["function"]+"_nextrun",lamb['nextrun'].isoformat(),86400)
 
                         lamb["lastrun"]=starttime.isoformat()
 
@@ -680,6 +718,7 @@ lshandler=None
 curconfig=""
 lambdas=[]
 lambdasht={}
+lambdaschanged={}
 path="./notebooks"
 requirementstime=0
 
@@ -739,6 +778,9 @@ if __name__ == '__main__':
     for topic in lambdasht:
         QUEUE.append(topic)
 
+    QUEUE.sort()
+    
+
     #>> AMQC
     server={"ip":os.environ["AMQC_URL"],"port":os.environ["AMQC_PORT"]
                     ,"login":os.environ["AMQC_LOGIN"],"password":os.environ["AMQC_PASSWORD"]}
@@ -766,16 +808,19 @@ if __name__ == '__main__':
             logger.error("Unable to send life sign.",exc_info=True)
             logger.error(e)
         try:
-            if(checkIfChanged(curconfig)):
-                logger.info(">>>>> Config changed")
-                logger.info(curconfig)
-                loadConfig()
-                newqueues=",".join([_ for _ in lambdasht])
-                if newqueues!=",".join(QUEUE):
-                    logger.info(">>>>>>> SUBSCRIPTION changed...QUITTING")
-                    conn.disconnect()
-                    thread_check_intervals = None
-                    break
+            with intervalfn_lock:
+                if(checkIfChanged(curconfig)):
+                    logger.info(">>>>> Config changed")
+                    logger.info(curconfig)
+                    loadConfig()
+                    q=[_ for _ in lambdasht]+["/topic/NYX_LAMBDA_COMMAND"]
+                    q.sort()
+                    newqueues=",".join(q)
+                    if newqueues!=",".join(QUEUE):
+                        logger.info(">>>>>>> SUBSCRIPTION changed...QUITTING")
+                        conn.disconnect()
+                        thread_check_intervals = None
+                        break
         except Exception as e:
             logger.error("Unable to check changed.",exc_info=True)
             logger.error(e)
@@ -822,6 +867,7 @@ if __name__ == '__main__':
                     }
 
                     upsert["upsert"]=copy.deepcopy(lamb)
+                    upsert["upsert"]["crontab"]=None
                     if 'nextrun' in lamb:
                         upsert['script']['params']['nextrun'] = lamb['nextrun'].isoformat()
                         upsert['script']['source'] += "ctx._source.nextrun = params.nextrun;"
