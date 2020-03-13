@@ -443,7 +443,7 @@ def loadConfig():
                         elif "#@CRON=" in  cell['source'][0]:
                             pass
 
-                        elif "#@INTERVAL=" in  cell['"source"'][0]:
+                        elif "#@INTERVAL=" in  cell['source'][0]:
                             interval = humanfriendly.parse_timespan(cell["source"][0][11:].strip())
                         else:
                             continue
