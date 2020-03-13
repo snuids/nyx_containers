@@ -28,11 +28,15 @@ VERSION HISTORY
 * 22 Jan 2020 1.6.0 **AMA** Simple notebook mode added
 * 04 Feb 2020 1.6.4 **AMA** Better nyx_build_report file
 * 11 Feb 2020 1.6.5 **AMA** Built with latest eshelper 1.2.0
+* 05 Mar 2020 1.7.1 **AMA** Includes demo reports
+* 09 Mar 2020 1.7.2 **AMA** Chmod added after each copy of a demo file
 """
+import os
 import json
 import time
 import uuid
 import base64
+import shutil
 import threading
 import subprocess 
 import traceback
@@ -47,11 +51,43 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 
 
-VERSION="1.6.5"
-QUEUE=["/queue/NYX_REPORT_STEP2"]
+VERSION="1.7.2"
+QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 ################################################################################
 def messageReceived(destination,message,headers):
+    if "STEP2" in destination:
+        messageReceivedReport(destination,message,headers)
+    else:
+        messageReceivedAddReport(destination,message,headers)
+
+def messageReceivedAddReport(destination,message,headers):
+    logger.info("==> "*10)
+    logger.info("Message Received %s" % destination)
+    logger.info(message)
+    
+    
+    messagejson=json.loads(message)
+    if messagejson["reportType"]=="python":
+        shutil.copy("./demoreports/demopython.py",messagejson["exec"])
+        os.chmod(messagejson["exec"],0o666)
+
+    elif messagejson["reportType"]=="jasper":
+        shutil.copy("./demoreports/demojasper.jrxml",messagejson["jasper"])
+        os.chmod(messagejson["jasper"],0o666)
+
+    elif messagejson["reportType"]=="notebook":
+        shutil.copy("./demoreports/demoxlsx.ipynb","./reports/notebooks/"+messagejson["notebook"]+".ipynb")
+        os.chmod("./reports/notebooks/"+messagejson["notebook"]+".ipynb",0o666)
+
+    elif messagejson["reportType"]=="notebook_doc":
+        shutil.copy("./demoreports/demodocx.ipynb","./reports/notebooks/"+messagejson["notebook"]+".ipynb")
+        shutil.copy("./demoreports/demodocx.docx","./reports/notebooks/"+messagejson["notebook"]+".docx")
+        os.chmod("./reports/notebooks/"+messagejson["notebook"]+".ipynb",0o666)
+        os.chmod("./reports/notebooks/"+messagejson["notebook"]+".docx",0o666)
+
+
+def messageReceivedReport(destination,message,headers):
     """
     Generates a report and store it locally on the drive. There are two types of report:
 
