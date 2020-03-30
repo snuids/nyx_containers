@@ -362,7 +362,11 @@ def save_log(logs,guid,lambdaname,runner,lamb,message=None,headers=None):
         resdelete=os.system("find "+path+"/inputs/"+" -mtime +3 -delete")
         logger.info("Res="+str(resdelete))
 
-    es.index("nyx_lambdalog",id=guid,doc_type="doc",body=body)
+    if elkversion <= 6:
+        es.index("nyx_lambdalog", id = guid, doc_type = "doc", body = body)
+    else:
+        es.index("nyx_lambdalog", id = guid, body = body)
+
     logger.info("Saved")
 
 
@@ -519,7 +523,7 @@ def loadConfig():
             if elkversion<=6:
                 es.index(index="nyx_lambda",id=myid,doc_type="_doc",body=json.dumps(nlamb),op_type="create")
             else:
-                es.index(index="nyx_lambda",id=myid,doc_type="_doc",body=json.dumps(nlamb),op_type="create")
+                es.index(index="nyx_lambda",id=myid,body=json.dumps(nlamb),op_type="create")
         except:
             logger.info("Record exists.")
 
