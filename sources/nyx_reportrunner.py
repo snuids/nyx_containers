@@ -30,28 +30,35 @@ VERSION HISTORY
 * 11 Feb 2020 1.6.5 **AMA** Built with latest eshelper 1.2.0
 * 05 Mar 2020 1.7.1 **AMA** Includes demo reports
 * 09 Mar 2020 1.7.2 **AMA** Chmod added after each copy of a demo file
+* 20 Mar 2020 1.8.0 **AMA** Jasper JDBC mode added
+* 26 Mar 2020 1.8.6 **AMA** Better localization of date parameters
+* 26 Mar 2020 1.0.0 **AMA** datetime imported by default
 """
+
 import os
 import json
+import pytz
 import time
 import uuid
 import base64
 import shutil
+import tzlocal
 import threading
 import subprocess 
 import traceback
 import os,logging,sys
 
 
-from logging.handlers import TimedRotatingFileHandler
-from amqstompclient import amqstompclient
-from datetime import datetime
 from functools import wraps
-from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
+from datetime import datetime
+from dateutil.parser import parse
+from amqstompclient import amqstompclient
+from logging.handlers import TimedRotatingFileHandler
 from logstash_async.handler import AsynchronousLogstashHandler
+from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.7.2"
+VERSION="1.9.0"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 ################################################################################
@@ -131,7 +138,7 @@ def messageReceivedReport(destination,message,headers):
 
     logger.info("Report Type:"+reporttype)
 
-    if reporttype=="jasper":
+    if reporttype=="jasper" or reporttype=="jasper_jdbc":
         if "jasper" not in messagejson["report"]:
             status="Error"
             errormessage="Jasper not defined"
@@ -177,13 +184,26 @@ def messageReceivedReport(destination,message,headers):
     if errormessage=="":        
         
 
-        if reporttype=="jasper":
+        if reporttype=="jasper" or reporttype=="jasper_jdbc":
             path='/'.join(jasper.split('/')[0:-1])
             logger.info("PATH="+path)
 
+            containertimezone=pytz.timezone(tzlocal.get_localzone().zone)
+
+            def convert_dt(adate):
+                return "DATE@"+parse(adate).astimezone(containertimezone).strftime("%Y%m%d%H%M%S")
+
             todo_params=[]
-            for param in messagejson["report"]["parameters"]:   
-                todo_params.append(param["name"]+"="+param["value"])
+            for param in messagejson["report"]["parameters"]: 
+                if param["type"]=="text":   
+                    todo_params.append(param["name"]+"="+param["value"])
+                elif param["type"]=="interval":   
+                    todo_params.append(param["name"]+"_start="+convert_dt(param["value"][0]))
+                    todo_params.append(param["name"]+"_end="+convert_dt(param["value"][1]))
+                elif param["type"]=="date":   
+                    todo_params.append(param["name"]+"="+convert_dt(param["value"]))
+                else:
+                    todo_params.append(param["name"]+"="+param["value"])
             
 
             logger.info("Preparing Jasper TODO...")
@@ -198,10 +218,20 @@ def messageReceivedReport(destination,message,headers):
             todo="Jasper=../"+messagejson["report"]["jasper"]+"\r\n"
             todo+="Parameters="+"&".join(todo_params)+"\r\n"
             todo+="Export="+todo_exports+"\r\n"
-            todo+="DataSource="+os.environ["JDBC_DS"]+"\r\n"
-            todo+="Driver=com.amazon.opendistroforelasticsearch.jdbc.Driver\r\n"
-            todo+="DBUser="+os.environ["ELK_LOGIN"]+"\r\n"
-            todo+="DBPassword="+os.environ["ELK_PASSWORD"]+"\r\n"
+            if reporttype=="jasper":
+                todo+="DataSource="+os.environ["JDBC_DS"]+"\r\n"
+                todo+="Driver=com.amazon.opendistroforelasticsearch.jdbc.Driver\r\n"
+                todo+="DBUser="+os.environ["ELK_LOGIN"]+"\r\n"
+                todo+="DBPassword="+os.environ["ELK_PASSWORD"]+"\r\n"
+            else:
+                todo+="DataSource="+messagejson["report"]["jdbc_url"]+"\r\n"
+                todo+="Driver="+messagejson["report"]["jdbc_driver"]+"\r\n"
+                todo+="DBUser="+messagejson["report"]["jdbc_login"]+"\r\n"
+                try:    # TRY with OS environment variable first
+                    todo+="DBPassword="+os.environ[messagejson["report"]["jdbc_password"]]+"\r\n"
+                except:
+                    todo+="DBPassword="+messagejson["report"]["jdbc_password"]+"\r\n"
+
             todo+="Output="+messagejson["output"]+"\r\n"
 
             jobtodopath="./jaspergenerator/job2todo"+os.environ["RUNNER"]
