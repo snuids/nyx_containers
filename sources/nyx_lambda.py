@@ -21,8 +21,16 @@ VERSION HISTORY
 * 02 Mar 2020 1.3.27 **AMA** Fixed outputs
 * 03 Mar 2020 1.3.30 **AMA** Fixed restart issues
 * 09 Mar 2020 1.3.31 **AMA** CRON keyword added
+* 18 Mar 2020 1.3.33 **AMA** Better lambda supervision
+* 18 Mar 2020 1.3.34 **AMA** Added ODBC drivers
+* 19 Mar 2020 1.4.0  **AMA** Fix startup sequence when requirements are changed. 
+                             Function name added to input folder. Fix a bug that created ghost functions if
+                             there is a syntax error in the lambda.
+* 24 Mar 2020 1.4.1  **AMA** SAVEINPUT parameter added
 """
+import os
 import re
+import sys
 import json
 import time
 import uuid
@@ -49,7 +57,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.3.31"
+VERSION="1.4.1"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
@@ -272,7 +280,8 @@ def messageReceived(destination,message,headers):
                 global_icon="check>green"
 
                 starttime=datetime.now(timezone.utc)
-                
+                lamb["starttime"]=starttime
+                lamb["running_icon"]="regular/play-circle"
                 try:
                     if isinstance(lamb["code"] ,str):
                         for trace in [_ for _ in lamb["tb"].split("\n")]:
@@ -307,6 +316,8 @@ def messageReceived(destination,message,headers):
                     duration=(datetime.now(timezone.utc)-starttime).total_seconds()*1000
                     lamb["duration"]=round(duration,2)
                     lamb["result_icon"]=global_icon
+                    lamb["running_icon"]="regular/check-circle"
+                    del lamb["starttime"]
 
                 l_uuid=str(uuid.uuid1())
                 save_log(logs,l_uuid,lamb['function'],str(os.environ["RUNNER"]),lamb,message=message,headers=headers)
@@ -350,17 +361,24 @@ def save_log(logs,guid,lambdaname,runner,lamb,message=None,headers=None):
 
         jsonheaders=json.dumps(headers)
         
-        file = open(path+"/inputs/"+guid+".txt","w") 
-        file.write(jsonheaders+"\r\n") 
-        file.write(message) 
-        file.close() 
-  
+        try:
+            os.mkdir( path+"/inputs/"+lamb["orgfunction"]+"/")
+        except:
+            pass
+
+        if "saveinput" in lamb and lamb["saveinput"]:
+            file = open(path+"/inputs/"+lamb["orgfunction"]+"/"+guid+".txt","w") 
+            file.write(jsonheaders+"\r\n") 
+            file.write(message) 
+            file.close() 
+            logger.info("Delete files older than 3 days.")
+            resdelete=os.system("find "+path+"/inputs/"+" -mtime +3 -delete")
+            logger.info("Res="+str(resdelete))
+
+
         body["headers"]=jsonheaders
         body["inputuuid"]=guid
 
-        logger.info("Delete files older than 3 days.")
-        resdelete=os.system("find "+path+"/inputs/"+" -mtime +3 -delete")
-        logger.info("Res="+str(resdelete))
 
     es.index("nyx_lambdalog",id=guid,doc_type="doc",body=body)
     logger.info("Saved")
@@ -439,11 +457,14 @@ def loadConfig():
                     interval = 0
                     crontab=None
                     topics = []
+                    saveinput=False
 
                     
                     if len(cell['source']) > 1:
                         if "#@LISTEN=" in  cell['source'][0]:
-                            topics = cell["source"][0][9:].strip().split(",")
+                            topics = cell["source"][0][9:].split('(')[0].strip().split(",")
+                            
+                            saveinput="SAVEINPUT" in cell["source"]
 
                         elif "#@CRON=" in  cell['source'][0]:
                             logger.info("Decoding CRON:<"+cell["source"][0][7:].strip()+">")
@@ -479,14 +500,15 @@ def loadConfig():
                             newcode,realfunction=computeNewCode(f,newcode,common.get(f,""))
                             try:
                                 exec(newcode)
-                                lambdas.append({"runner":str(os.environ["RUNNER"]),"file":f.replace(path+"/",""),"topics":topics,"crontab":crontab,"interval":interval,"runs":0,"errors":0,"orgfunction":function
+                                lambdas.append({"runner":str(os.environ["RUNNER"]),"file":f.replace(path+"/",""),"saveinput":saveinput,"topics":topics,"crontab":crontab,"interval":interval,"runs":0,"errors":0,"orgfunction":function
                                                 ,"function":realfunction,"code":eval(realfunction)})
                             except:
                                 tb = traceback.format_exc()
                                 for trace in ["TRACE:"+function+":"+_ for _ in tb.split("\n")]:
                                     logger_info(trace)
                                 logger.error("CODE:"+newcode)
-                                lambdas.append({"runner":str(os.environ["RUNNER"]),"file":f.replace(path+"/",""),"topics":topics,"interval":interval,"runs":0,"errors":0,"function":function
+                                lambdas.append({"runner":str(os.environ["RUNNER"]),"file":f.replace(path+"/",""),"topics":topics,"interval":interval,"runs":0,"errors":0,"orgfunction":function
+                                                ,"function":realfunction 
                                                 ,"code":newcode,"tb":tb})
 
                             
@@ -592,7 +614,90 @@ def checkIfRequirementsChanged():
     return True
     
 
+################################################################################
 
+def updateStatsThread():
+    while thread_check_intervals:
+        time.sleep(5)
+        updateStats()
+
+
+def updateStats():
+    try: # SEND lambda updates if any
+        logger.info("Updating Stats...")
+        bulkbody=""
+        for lamb in lambdas:
+            if lamb["runs"]>=1 or lamb.get("running_icon","")=="regular/play-circle":
+                logger.info("Updating lambda stats")
+                if not "log_uuid" in lamb:
+                    lamb["log_uuid"]="NA"
+
+                if not "type_icon" in lamb:
+                    lamb["type_icon"]="question"                        
+
+                if not "result_icon" in lamb:
+                    lamb["result_icon"]="question"
+
+                duration=0
+
+                if "starttime" in lamb and lamb.get("running_icon","")=="regular/play-circle":
+                    duration=(datetime.now(timezone.utc)-lamb["starttime"]).total_seconds()*1000
+                else:
+                    duration=lamb.get("duration",0)
+                duration=int(duration)
+
+                upsert={
+                    "script" : {
+                        "source": "ctx._source.errors += params.errors;ctx._source.runs += params.runs;ctx._source.lastrun = params.lastrun;ctx._source.return = params.return;ctx._source.duration = params.duration;ctx._source.log_uuid = params.log_uuid;ctx._source.type_icon = params.type_icon;ctx._source.result_icon = params.result_icon;ctx._source.running_icon = params.running_icon;",
+                        "lang": "painless",
+                        "params" : {                                
+                            "errors" : lamb.get("errors",0),
+                            "runs" : lamb["runs"],
+                            "lastrun" : lamb.get("lastrun",datetime.now(timezone.utc).isoformat()),
+                            "return" : lamb.get("return",""),
+                            "duration" : duration,
+                            "log_uuid": lamb.get("log_uuid",0),
+                            "type_icon": lamb["type_icon"],
+                            "result_icon": lamb.get("result_icon",""),
+                            "running_icon": lamb.get("running_icon","regular/check-circle")
+                        }
+                    }
+                }
+
+                upsert["upsert"]=copy.deepcopy(lamb)
+                upsert["upsert"]["crontab"]=None
+                if 'nextrun' in lamb:
+                    upsert['script']['params']['nextrun'] = lamb['nextrun'].isoformat()
+                    upsert['script']['source'] += "ctx._source.nextrun = params.nextrun;"
+
+                    upsert["upsert"]['nextrun'] = lamb['nextrun'].isoformat()
+
+                lamb["errors"]=0
+                lamb["runs"]=0
+
+                # logger.info(upsert)
+
+
+                del upsert["upsert"]["code"]
+                if "starttime" in upsert["upsert"]:
+                    del upsert["upsert"]["starttime"]
+                if elkversion<=6:
+                    action={ "update" : {"_id" :("R"+str(os.environ["RUNNER"])+"_"+lamb["function"]).lower(), "_index" : "nyx_lambda", "retry_on_conflict" : 1,"_type":"_doc"} }
+                else:
+                    action={ "update" : {"_id" :("R"+str(os.environ["RUNNER"])+"_"+lamb["function"]).lower(), "_index" : "nyx_lambda", "retry_on_conflict" : 1} }
+                bulkbody+=json.dumps(action)+"\r\n"
+                bulkbody+=json.dumps(upsert)+"\r\n"
+
+                logger.info("===>"+lamb.get("running_icon","regular/check-circle"))
+        if len(bulkbody)>0:
+            #logger.info(bulkbody)
+            res=es.bulk(bulkbody)
+            # logger.info(res)
+
+
+    except Exception as e:
+        logger.error("Unable to update lambda stats.",exc_info=True)
+        logger.error(e)
 
 
 
@@ -638,7 +743,7 @@ def check_intervals_and_cron():
 
             if ('interval' in lamb and lamb['interval'] > 0) or ('crontab' in lamb and lamb['crontab']!=None):
                 starttime=datetime.now(timezone.utc)
-                
+                lamb["starttime"]=starttime
                 if 'nextrun' not in lamb:
 
                     if 'crontab' in lamb and lamb['crontab']!=None:
@@ -669,6 +774,7 @@ def check_intervals_and_cron():
                         lamb["type"]="cron"
 
                         global_icon="check>green"
+                        lamb["running_icon"]="regular/play-circle"
 
                         try:
                             if isinstance(lamb["code"] ,str):
@@ -699,6 +805,8 @@ def check_intervals_and_cron():
                             lamb["runs"]+=1
                             duration=(datetime.now(timezone.utc)-starttime).total_seconds()*1000
                             lamb["duration"]=round(duration,2)
+                            lamb["running_icon"]="regular/check-circle"
+                            del lamb["starttime"]
                         
                         l_uuid=str(uuid.uuid1())
                         lamb["log_uuid"]=l_uuid
@@ -760,6 +868,11 @@ if __name__ == '__main__':
     except:
         logger.info("/inputs already exists")
 
+    if(checkIfRequirementsChanged()):
+        logger.info(">>>>>>> Requirements changed at startup...QUITTING ")
+        os._exit(1)
+
+
     #>> ELK
     logger.info (os.environ["ELK_SSL"])
 
@@ -797,6 +910,12 @@ if __name__ == '__main__':
         thread_check_intervals = threading.Thread(target = check_intervals_and_cron)
         thread_check_intervals.start()
        
+    ####################################################
+
+    statsTh = threading.Thread(target=updateStatsThread)    
+    statsTh.start()
+    
+    
     while True:
         time.sleep(5)
         try:            
@@ -835,67 +954,7 @@ if __name__ == '__main__':
             logger.error("Unable to check requirements.",exc_info=True)
             logger.error(e)
 
-        try: # SEND lambda updates if any
-            bulkbody=""
-            for lamb in lambdas:
-                if lamb["runs"]>=1:
-                    logger.info("Updating lambda stats")
-                    if not "log_uuid" in lamb:
-                        lamb["log_uuid"]="NA"
-
-                    if not "type_icon" in lamb:
-                        lamb["type_icon"]="question"                        
-
-                    if not "result_icon" in lamb:
-                        lamb["result_icon"]="question"
-
-                    upsert={
-                        "script" : {
-                            "source": "ctx._source.errors += params.errors;ctx._source.runs += params.runs;ctx._source.lastrun = params.lastrun;ctx._source.return = params.return;ctx._source.duration = params.duration;ctx._source.log_uuid = params.log_uuid;ctx._source.type_icon = params.type_icon;ctx._source.result_icon = params.result_icon;",
-                            "lang": "painless",
-                            "params" : {                                
-                                "errors" : lamb["errors"],
-                                "runs" : lamb["runs"],
-                                "lastrun" : lamb["lastrun"],
-                                "return" : lamb["return"],
-                                "duration" : lamb["duration"],
-                                "log_uuid": lamb["log_uuid"],
-                                "type_icon": lamb["type_icon"],
-                                "result_icon": lamb["result_icon"]
-                            }
-                        }
-                    }
-
-                    upsert["upsert"]=copy.deepcopy(lamb)
-                    upsert["upsert"]["crontab"]=None
-                    if 'nextrun' in lamb:
-                        upsert['script']['params']['nextrun'] = lamb['nextrun'].isoformat()
-                        upsert['script']['source'] += "ctx._source.nextrun = params.nextrun;"
-
-                        upsert["upsert"]['nextrun'] = lamb['nextrun'].isoformat()
-
-                    lamb["errors"]=0
-                    lamb["runs"]=0
-
-                    # logger.info(upsert)
-
-
-                    del upsert["upsert"]["code"]
-                    if elkversion<=6:
-                        action={ "update" : {"_id" :("R"+str(os.environ["RUNNER"])+"_"+lamb["function"]).lower(), "_index" : "nyx_lambda", "retry_on_conflict" : 1,"_type":"_doc"} }
-                    else:
-                        action={ "update" : {"_id" :("R"+str(os.environ["RUNNER"])+"_"+lamb["function"]).lower(), "_index" : "nyx_lambda", "retry_on_conflict" : 1} }
-                    bulkbody+=json.dumps(action)+"\r\n"
-                    bulkbody+=json.dumps(upsert)+"\r\n"
-            if len(bulkbody)>0:
-                # logger.info(bulkbody)
-                res=es.bulk(bulkbody)
-                # logger.info(res)
-
-
-        except Exception as e:
-            logger.error("Unable to update lambda stats.",exc_info=True)
-            logger.error(e)
+#        updateStats()
 
 
 

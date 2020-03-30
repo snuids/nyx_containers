@@ -3,7 +3,9 @@ import os
 import re
 import sys
 import json
+import pytz
 import logging
+import tzlocal
 import datetime
 import traceback
 import cachetools
@@ -14,6 +16,7 @@ import pandas as pd
 matplotlib.use('TkAgg')
 from docx import Document
 from datetime import timezone
+from datetime import datetime
 from docx.shared import Inches
 import matplotlib.pyplot as plt
 from dateutil.parser import parse
@@ -29,7 +32,7 @@ logger.setLevel(logging.INFO)
 #######################################################################################
 def save_log():
     logger.info("Saving log")
-    body={"@timestamp":datetime.datetime.now().isoformat(),"logs":logs}
+    body={"@timestamp":datetime.now().isoformat(),"logs":logs}
     es.index("nyx_reportlog",id=report["id"],doc_type="doc",body=body)
     logger.info("Saved")
 
@@ -87,7 +90,7 @@ def replaceText(replacementHT,text):
 #######################################################################################
 
 print("Starting v0.2")
-print(datetime.datetime.now(timezone.utc).isoformat())
+print(datetime.now(timezone.utc).isoformat())
 localmode=False
 try:
     os.environ["LOCAL_MODE"]
@@ -109,10 +112,14 @@ print(report["report"]["parameters"])
 
 params={}
 
+containertimezone=pytz.timezone(tzlocal.get_localzone().zone)
+
 for param in report["report"]["parameters"]:
     if param["type"]=="interval":
-        params[param["name"]+"_start"]=parse(param["value"][0])
-        params[param["name"]+"_end"]=parse(param["value"][1])
+        params[param["name"]+"_start"]=parse(param["value"][0]).astimezone(containertimezone)
+        params[param["name"]+"_end"]=parse(param["value"][1]).astimezone(containertimezone)
+    elif param["type"]=="date":
+        params[param["name"]]=parse(param["value"]).astimezone(containertimezone)
     else:
         params[param["name"]]=param["value"]
 
@@ -149,23 +156,23 @@ replacementHT.update(params)
 ################################################################################
 def logger_info(log,exc_info=False):
     logger.info(log,exc_info=exc_info)
-    logs.append("%s\tINFO\t%s" %(datetime.datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+    logs.append("%s\tINFO\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
 
 def logger_error(log,exc_info=False):
     logger.error(log,exc_info=exc_info)
-    logs.append("%s\tERROR\t%s" %(datetime.datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+    logs.append("%s\tERROR\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
 
 def logger_debug(log,exc_info=False):
     logger.debug(log,exc_info=exc_info)
-    logs.append("%s\tDEBUG\t%s" %(datetime.datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+    logs.append("%s\tDEBUG\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
 
 def logger_warn(log,exc_info=False):
     logger.warn(log,exc_info=exc_info)
-    logs.append("%s\tWARN\t%s" %(datetime.datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+    logs.append("%s\tWARN\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
 
 def logger_fatal(log,exc_info=False):
     logger.fatal(log,exc_info=exc_info)
-    logs.append("%s\tINFO\t%s" %(datetime.datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+    logs.append("%s\tINFO\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
 def computeNewCode(newcode):
     return newcode.replace("logger.","logger_")
 
@@ -185,6 +192,21 @@ with open(ipynbpath, 'r') as content_file:
                     tb = traceback.format_exc()
                     for trace in ["TRACE:"+_ for _ in tb.split("\n")]:
                         logger_info(trace)
+
+                        if "<string>"  in trace and "<module>" in trace:
+                           try:
+                                linenbr=int(trace.split("line ")[1].split(",")[0])
+                                linecodes=newcode.split("\n")
+                                for i in range(linenbr-5,linenbr+4):
+                                    if i>=0 and i<len(linecodes):
+                                        if i==linenbr-1:
+                                          logger_error(">>> CODE:"+linecodes[i])
+                                        else:
+                                          logger_info(">>> CODE:"+linecodes[i])
+
+                           except e:
+                                logger_error("ERROR while decoding error",exc_info=True)
+
                     save_log()
                     raise Exception("ERROR COMMON")
             if len(cell["source"])>0 and "#@PARAGRAPH=" in cell["source"][0]:
