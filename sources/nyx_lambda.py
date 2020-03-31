@@ -27,6 +27,7 @@ VERSION HISTORY
                              Function name added to input folder. Fix a bug that created ghost functions if
                              there is a syntax error in the lambda.
 * 24 Mar 2020 1.4.1  **AMA** SAVEINPUT parameter added
+* 24 Mar 2020 1.4.2  **AMA** Better error logs
 """
 import os
 import re
@@ -57,7 +58,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.4.1"
+VERSION="1.4.2"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
@@ -306,6 +307,22 @@ def messageReceived(destination,message,headers):
                     for trace in ["TRACE:"+lamb["function"]+":"+_ for _ in tb.split("\n")]:
                         logger_info(trace)
 
+                        if "<string>"  in trace in trace:
+                           try:
+                                linenbr=int(trace.split("line ")[1].split(",")[0])
+                                linecodes=lamb["newcode"].split("\n")
+                                logger_warn(">>>>>>>>>>>>>>>>>>>>>>>>>>>> CODE START")
+                                for i in range(linenbr-6,linenbr+5):
+                                    if i>=0 and i<len(linecodes):
+                                        if i==linenbr-1:
+                                          logger_error(""+linecodes[i])
+                                        else:
+                                          logger_warn(""+linecodes[i])
+                                logger_warn(">>>>>>>>>>>>>>>>>>>>>>>>>>>> CODE END")
+                           except:
+                                logger_error("ERROR while decoding error",exc_info=True)
+
+
                     lamb["errors"]+=1
                     lamb["return"]="FAILURE"
                     lamb["crashed"]=1
@@ -501,7 +518,7 @@ def loadConfig():
                             try:
                                 exec(newcode)
                                 lambdas.append({"runner":str(os.environ["RUNNER"]),"file":f.replace(path+"/",""),"saveinput":saveinput,"topics":topics,"crontab":crontab,"interval":interval,"runs":0,"errors":0,"orgfunction":function
-                                                ,"function":realfunction,"code":eval(realfunction)})
+                                                ,"function":realfunction,"code":eval(realfunction),"newcode":newcode})
                             except:
                                 tb = traceback.format_exc()
                                 for trace in ["TRACE:"+function+":"+_ for _ in tb.split("\n")]:
@@ -779,7 +796,7 @@ def check_intervals_and_cron():
                         try:
                             if isinstance(lamb["code"] ,str):
                                 for trace in [_ for _ in lamb["tb"].split("\n")]:
-                                    logger_error(trace)
+                                    logger_error(trace)                                    
 
                                 logger_info(">"*30)
                                 for code in lamb["code"].split("\n"):
@@ -796,6 +813,21 @@ def check_intervals_and_cron():
                             tb = traceback.format_exc()
                             for trace in ["TRACE:"+lamb["function"]+":"+_ for _ in tb.split("\n")]:
                                 logger_info(trace)
+                                if "<string>"  in trace:
+                                    try:
+                                        linenbr=int(trace.split("line ")[1].split(",")[0])
+                                        linecodes=lamb["newcode"].split("\n")
+                                        logger_warn(">>>>>>>>>>>>>>>>>>>>>>>>>>>> CODE START")
+                                        for i in range(linenbr-6,linenbr+5):
+                                            if i>=0 and i<len(linecodes):
+                                                if i==linenbr-1:
+                                                    logger_error(""+linecodes[i])
+                                                else:
+                                                    logger_warn(""+linecodes[i])
+                                        logger_warn(">>>>>>>>>>>>>>>>>>>>>>>>>>>> CODE END")
+                                    except:
+                                        logger_error("ERROR while decoding error",exc_info=True)
+
                             lamb["errors"]+=1
                             lamb["return"]="FAILURE"
                             lamb["crashed"]=1
@@ -922,6 +954,14 @@ if __name__ == '__main__':
             elkversion=getELKVersion(es)
 
             variables={"platform":"_/_".join(platform.uname()),"icon":"file-code"}
+            variables["queue"]=",".join(QUEUE)
+
+            lambls=[]
+            for lamb in lambdas:
+                lambls.append({"function":lamb["orgfunction"],"file":lamb["file"]})
+
+            variables["lambdas"]=lambls
+
             conn.send_life_sign(variables)
         except Exception as e:
             logger.error("Unable to send life sign.",exc_info=True)
