@@ -32,7 +32,8 @@ VERSION HISTORY
 * 09 Mar 2020 1.7.2 **AMA** Chmod added after each copy of a demo file
 * 20 Mar 2020 1.8.0 **AMA** Jasper JDBC mode added
 * 26 Mar 2020 1.8.6 **AMA** Better localization of date parameters
-* 26 Mar 2020 1.0.0 **AMA** datetime imported by default
+* 26 Mar 2020 1.9.0 **AMA** datetime imported by default
+* 29 Apr 2020 1.9.1 **AMA** Linked with jasper 6.12
 """
 
 import os
@@ -58,7 +59,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.0"
+VERSION="1.9.1"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 ################################################################################

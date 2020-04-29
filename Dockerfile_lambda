@@ -4,8 +4,16 @@ MAINTAINER lapin
 RUN apt-get update
 RUN apt-get install -y vim
 
+RUN apt-get install -y python3-dev
+RUN apt-get install -y unixodbc-dev unixodbc-bin unixodbc freetds-dev tdsodbc
+
+RUN apt-get install -y locales locales-all
+
 COPY ./sources/requirements.txt /opt/sources/requirements.txt
 RUN pip install -r /opt/sources/requirements.txt
+
+RUN apt-get install -y gcc python3-dev python3-pip libxml2-dev libxslt1-dev zlib1g-dev g++
+RUN pip install pyodbc
 
 COPY ./sources /opt/sources
 RUN rm -d -r /opt/sources/logs

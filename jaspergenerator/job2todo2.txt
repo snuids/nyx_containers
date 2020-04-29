@@ -1,0 +1,8 @@
+Jasper=.././reports/jasper/firstjasper.jrxml
+Parameters=param1=toto&param2_start=DATE@20200219000000&param2_end=DATE@20200320000000&param3=DATE@20200320000000
+Export=PDF
+DataSource=jdbc:postgresql://test2.nyx-ds.com:5444/nyx
+Driver=org.postgresql.Driver
+DBUser=nyx
+DBPassword=postgrespass
+Output=/Users/snuids/Documents/GitHub/nyx_containers/generated/id_27668596_31041029
