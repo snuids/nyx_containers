@@ -9,6 +9,7 @@ VERSION HISTORY
 
 * 19 Jun 2019 0.0.3 **AMA** Fix an UTC issue
 * 09 Jul 2019 0.0.4 **AMA** Mail subjects and attachments can be customized
+* 01 Apr 2020 1.0.1 **AMA** Use cron to compute next runs
 """
 import re
 import json
@@ -25,7 +26,7 @@ import subprocess
 import os,logging,sys
 
 
-
+from crontab import CronTab
 from datetime import timedelta
 from logging.handlers import TimedRotatingFileHandler
 from amqstompclient import amqstompclient
@@ -35,7 +36,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 from dateutil import parser
 
-VERSION="0.0.4"
+VERSION="1.0.1"
 MODULE="ReportScheduler"
 QUEUE=[]
 
@@ -60,6 +61,25 @@ def resolveDateString(name,adate):
     
     return  result
 
+def computeCronOfTask(taskin,curtime):
+    triggertype=taskin["trigger"]["type"]
+    if triggertype=="daily":
+        triggertime=taskin["trigger"]["time"].split(":")
+        days=[str((_+1)%7) for _ in taskin["trigger"]["days"]]
+        days.sort()
+        cron=str(int(triggertime[1]))+" "+str(int(triggertime[0]))+" * * "+",".join(days)
+        
+    if triggertype=="monthly":
+        triggertime=taskin["trigger"]["time"].split(":")
+        days=[str((_)) for _ in taskin["trigger"]["days"]]    
+        days.sort()
+        cron=str(int(triggertime[1]))+" "+str(int(triggertime[0]))+" "+",".join(days)+" * *"
+        
+    crontab=CronTab(cron)
+    nextrun=curtime+timedelta(seconds=crontab.next(curtime,default_utc=True))
+    
+    return cron,nextrun
+
 
 def execute_report(duetime,task):
     """
@@ -74,7 +94,11 @@ def execute_report(duetime,task):
     """
     logger.info(">>>>>>>>>>> Executing task..............")
     logger.info(task)
-    report=es.get(doc_type="doc",index="nyx_reportdef",id=task["report"])
+    try:
+        report=es.get(doc_type="doc",index="nyx_reportdef",id=task["report"])
+    except:
+        report=es.get(index="nyx_reportdef",id=task["report"])
+
     logger.info(report)
     for parameter in report["_source"]["parameters"]:
         logger.info(parameter)
@@ -113,7 +137,11 @@ def execute_report(duetime,task):
 
     if "attachmentName" in task:
         message["mailAttachmentName"]=resolveDateString(task["attachmentName"],duetime)
-    message["mailSubject"]=resolveDateString(task["mailSubject"],duetime)
+    if "mailSubject" in message:
+        message["mailSubject"]=resolveDateString(task["mailSubject"],duetime)
+    else:
+        message["mailSubject"]="NA"
+        
     logger.info(json.dumps(message))
 
     conn.send_message("/queue/NYX_REPORT_STEP1",json.dumps(message))
@@ -167,67 +195,33 @@ def checkTasks():
     logger.info("Checking tasks....")
     docs=es.search(index="nyx_reportperiodic",size=10000)
     
+    containertimezone=pytz.timezone(tzlocal.get_localzone().zone)
+
     for task in docs["hits"]["hits"]:
         #logger.info("TASK-"*10)
         #logger.info(task)
         taskin=task["_source"]
+        
         if("nextRun" in taskin):
             try:
-                nextrun=parser.parse(taskin["nextRun"]).replace(tzinfo=None) #.replace(tzinfo=pytz.timezone(tzlocal.get_localzone().zone))
-                #logger.info(">>>>>>>>>>>>>>> NEXT RUN %s" %(nextrun))
-                if(nextrun<datetime.now()):
+                nextrun=parser.parse(taskin["nextRun"]).astimezone(containertimezone)#.replace(tzinfo=None) #.replace(tzinfo=pytz.timezone(tzlocal.get_localzone().zone))
+                cron,nextrun2=computeCronOfTask(taskin,nextrun+timedelta(hours=1))
+
+                if(nextrun<datetime.now().astimezone(containertimezone)):
+                    logger.info(">>>>>>>>>>>>>>> NEXT RUN %s" %(nextrun))
+                    logger.info("NEXT RUN2 %s" %(nextrun2))
+                    logger.info("CRON %s" %(cron))
+
                     logger.info("===> Compute next run")
                     triggertype=taskin["trigger"]["type"]
-                    if triggertype=="daily":
-                        logger.info("*-"*20)
-                        logger.info(taskin["trigger"])
-                        maxchecks=10
-                        
-                        nextrun2=nextrun
-                        
-                        while maxchecks>0:
-                            nextrun2=nextrun2+timedelta(days=1)
-                            
-                            if nextrun2.weekday() in taskin["trigger"]["days"]:
-                                logger.info(">>> Week day  selected.")
-                                nextrun2=nextrun2.replace(hour=int(taskin["trigger"]["time"].split(":")[0])
-                                                        ,minute=int(taskin["trigger"]["time"].split(":")[1]), second=0)
-                                logger.info("NextRun"*30)
-                                logger.info(nextrun2.isoformat())     
+                    
+                    task["_source"]["nextRun"]=nextrun2.isoformat()
+                    try:
+                        resind=es.index(index=task["_index"],doc_type="doc",id=task["_id"],body=task["_source"])
+                    except:
+                        resind=es.index(index=task["_index"],id=task["_id"],body=task["_source"])
 
-                                task["_source"]["nextRun"]=nextrun2.isoformat()                                
-                                resind=es.index(index=task["_index"],doc_type="doc",id=task["_id"],body=task["_source"])
-                                logger.info(resind)                                                  
-                                execute_report(nextrun,task["_source"])
-                                break
-                                                
-                            maxchecks-=1
-
-                    if triggertype=="monthly":
-                        logger.info("*-"*20)
-                        logger.info(taskin["trigger"])
-                        maxchecks=40
-                        
-                        nextrun2=nextrun
-                        
-                        while maxchecks>0:
-                            nextrun2=nextrun2+timedelta(days=1)
-                            
-                            if nextrun2.day in taskin["trigger"]["days"]:
-                                logger.info(">>> Week day  selected.")
-                                nextrun2=nextrun2.replace(hour=int(taskin["trigger"]["time"].split(":")[0])
-                                                        ,minute=int(taskin["trigger"]["time"].split(":")[1]), second=0)
-                                logger.info("NextRun"*30)
-                                logger.info(nextrun2.isoformat())     
-
-                                task["_source"]["nextRun"]=nextrun2.isoformat()
-                                resind=es.index(index=task["_index"],doc_type="doc",id=task["_id"],body=task["_source"])
-                                execute_report(nextrun,task["_source"])
-                                logger.info(resind)                                                  
-                                break
-                                                
-                            maxchecks-=1
-
+                    execute_report(nextrun,task["_source"])
 
 
             except Exception as e:

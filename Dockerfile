@@ -16,7 +16,7 @@ RUN rm -d -r /opt/sources/*.sh
 #RUN rm -d -r /opt/sources/reports
 
 WORKDIR /opt/sources
-CMD ["python", "nyx_xlsimporter.py"]
+#CMD ["python", "nyx_xlsimporter.py"]
 #CMD ["python", "nyx_reportrunner.py"]
 #CMD ["python", "biac_compute_instawork.py"]
 #CMD ["python", "biac_import_instawork.py"]
@@ -29,7 +29,7 @@ CMD ["python", "nyx_xlsimporter.py"]
 #CMD ["python", "biac_import_bags.py"]
 #CMD ["python","biac_import_bags.py"]
 #CMD ["python","biac_mails.py"]
-#CMD ["python","nyx_reportscheduler.py"]
+CMD ["python","nyx_reportscheduler.py"]
 #CMD ["python", "biac_mails.py"]
 #CMD ["python", "biac_import_kpi305_501.py"]
 #CMD ["python","nyx_formatconverter.py"]

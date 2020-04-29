@@ -28,6 +28,8 @@ VERSION HISTORY
                              there is a syntax error in the lambda.
 * 24 Mar 2020 1.4.1  **AMA** SAVEINPUT parameter added
 * 24 Mar 2020 1.4.2  **AMA** Better error logs
+* 03 Apr 2020 1.4.3  **AMA** Fix cron localization
+* 20 Apr 2020 1.4.4  **AMA** Locales added in Dcke rfile
 """
 import os
 import re
@@ -37,8 +39,10 @@ import time
 import uuid
 import copy
 import uuid
+import pytz
 import redis
 import base64
+import tzlocal
 import platform
 import threading
 import traceback
@@ -58,7 +62,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.4.2"
+VERSION="1.4.5"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
@@ -768,7 +772,10 @@ def check_intervals_and_cron():
                 if 'nextrun' not in lamb:
 
                     if 'crontab' in lamb and lamb['crontab']!=None:
-                        lamb['nextrun'] = datetime.now(timezone.utc)+timedelta(seconds=lamb['crontab'].next(default_utc=True))
+                        containertimezone=pytz.timezone(tzlocal.get_localzone().zone)
+
+                        #lamb['nextrun'] = datetime.now(timezone.utc)+timedelta(seconds=lamb['crontab'].next(default_utc=True))
+                        lamb['nextrun'] = datetime.now(containertimezone)+timedelta(seconds=lamb['crontab'].next(default_utc=False))
                     else:
                         lamb['nextrun'] = starttime
 
