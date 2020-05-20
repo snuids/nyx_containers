@@ -7,6 +7,15 @@ Runs code stored in notebooks using two triggers:
 * Interval
 * Message received
 
+Optionaly a lambda can be executed via a COMMAND using the following message on the topic: NYX_LAMBDA_COMMAND
+
+{
+  "runner":5,
+  "action":"execute",
+  "restapi":"myrestapi",
+  "body":{"a":1,"b":2}
+}
+
 VERSION HISTORY
 ===============
 
@@ -24,12 +33,14 @@ VERSION HISTORY
 * 18 Mar 2020 1.3.33 **AMA** Better lambda supervision
 * 18 Mar 2020 1.3.34 **AMA** Added ODBC drivers
 * 19 Mar 2020 1.4.0  **AMA** Fix startup sequence when requirements are changed. 
-                             Function name added to input folder. Fix a bug that created ghost functions if
-                             there is a syntax error in the lambda.
+Function name added to input folder. Fix a bug that created ghost functions if
+there is a syntax error in the lambda.
 * 24 Mar 2020 1.4.1  **AMA** SAVEINPUT parameter added
 * 24 Mar 2020 1.4.2  **AMA** Better error logs
 * 03 Apr 2020 1.4.3  **AMA** Fix cron localization
 * 20 Apr 2020 1.4.4  **AMA** Locales added in Dcke rfile
+* 12 May 2020 1.5.1  **AMA** Rest API allowed
+* 20 May 2020 1.5.2  **AMA** Use new elastic_helper
 """
 import os
 import re
@@ -62,7 +73,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.4.5"
+VERSION="1.5.2"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
@@ -244,7 +255,7 @@ def createNotebook(nbname,functionname,nbtype,nbparameter):
 
 ################################################################################
 
-def handleCommand(message):
+def handleCommand(message,global_headers):
     logger.info("Handling message:"+message)
     mobj=json.loads(message)
 
@@ -253,17 +264,31 @@ def handleCommand(message):
     else:
         if mobj["action"]=="add":
             createNotebook(mobj["notebook"],mobj["function"],mobj["type"],mobj["parameters"][0])
+        elif mobj["action"]=="execute":
+            executeLambda(mobj["restapi"],mobj["body"],global_headers,mobj)
         
+
+################################################################################
+def executeLambda(restapi,body,global_headers,mobj):
+    logger.info("Execute Lambda>>>>>"+restapi)
+    res=messageReceived("/restapi/"+restapi,json.dumps(body),global_headers)
+    mobj["return"]=json.dumps(res)
+    conn.send_message("/topic/NYX_LAMBDA_RESTAPI",json.dumps(mobj))
+
+
+
 
 ################################################################################
 def messageReceived(destination,message,headers):
     global es,global_message,global_destination,global_headers,logs,global_icon
 
+    returnval=None
+
     logger.info("==> "*10)
     logger.info("Message Received %s" % destination)
     
     if destination=="/topic/NYX_LAMBDA_COMMAND":
-        return handleCommand(message)
+        return handleCommand(message,global_headers)
 
     with intervalfn_lock:
         
@@ -280,7 +305,11 @@ def messageReceived(destination,message,headers):
                 lamb["lastrun"]=datetime.now(timezone.utc).isoformat()
 
                 lamb["crashed"]=0
-                lamb["type_icon"]="regular/envelope"
+                if "/restapi/" in destination:
+                    lamb["type_icon"]="satellite-dish"
+                else:
+                    lamb["type_icon"]="regular/envelope"
+
                 lamb["type"]="message"
                 global_icon="check>green"
 
@@ -302,6 +331,7 @@ def messageReceived(destination,message,headers):
                     else:
                         ret=lamb["code"]()
                         lamb["return"]=str(ret)
+                        returnval=ret
 #                    ret=lamb["code"]()
 #                    lamb["return"]=str(ret)
                     
@@ -343,7 +373,7 @@ def messageReceived(destination,message,headers):
                 l_uuid=str(uuid.uuid1())
                 save_log(logs,l_uuid,lamb['function'],str(os.environ["RUNNER"]),lamb,message=message,headers=headers)
                 lamb["log_uuid"]=l_uuid
-
+    return returnval
 
 
 ################################################################################
@@ -359,8 +389,13 @@ def logger_debug(log,exc_info=False):
     logger.debug(log,exc_info=exc_info)
     logs.append("%s\tDEBUG\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
 
+def logger_warning(log,exc_info=False):
+    logger.warning(log,exc_info=exc_info)
+    logs.append("%s\tWARN\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+
+
 def logger_warn(log,exc_info=False):
-    logger.warn(log,exc_info=exc_info)
+    logger.warning(log,exc_info=exc_info)
     logs.append("%s\tWARN\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
 
 def logger_fatal(log,exc_info=False):
@@ -483,6 +518,7 @@ def loadConfig():
                     crontab=None
                     topics = []
                     saveinput=False
+                    restapi=None
 
                     
                     if len(cell['source']) > 1:
@@ -510,6 +546,15 @@ def loadConfig():
                                 logger.error("Unable to decode interval.")
                                 logger.info(cell["source"][0])
                                 continue                                
+
+                        elif "#@RESTAPI=" in  cell['source'][0]:
+                            try:                            
+                                restapi =cell["source"][0][10:].strip()
+                            except:                                
+                                logger.error("Unable to decode rest api.")
+                                logger.info(cell["source"][0])
+                                continue                                
+                        
                         else:
                             continue
                             
@@ -525,7 +570,7 @@ def loadConfig():
                             newcode,realfunction=computeNewCode(f,newcode,common.get(f,""))
                             try:
                                 exec(newcode)
-                                lambdas.append({"runner":str(os.environ["RUNNER"]),"file":f.replace(path+"/",""),"saveinput":saveinput,"topics":topics,"crontab":crontab,"interval":interval,"runs":0,"errors":0,"orgfunction":function
+                                lambdas.append({"runner":str(os.environ["RUNNER"]),"file":f.replace(path+"/",""),"saveinput":saveinput,"topics":topics,"restapi":restapi,"crontab":crontab,"interval":interval,"runs":0,"errors":0,"orgfunction":function
                                                 ,"function":realfunction,"code":eval(realfunction),"newcode":newcode})
                             except:
                                 tb = traceback.format_exc()
@@ -547,6 +592,10 @@ def loadConfig():
             else:
                 lambdasht[topic]=[lamb]
 
+    for lamb in lambdas:
+        if "restapi" in lamb and lamb["restapi"]!=None and len(lamb["restapi"])>0:
+            lambdasht["/restapi/"+lamb["restapi"]]=[lamb]
+
     #action={ "update" : {"_id" :("R"+str(os.environ["RUNNER"])+"_"+lamb["function"]).lower(), "_index" : "nyx_lambda", "retry_on_conflict" : 1} } 
 
     for lamb in lambdas:
@@ -556,6 +605,9 @@ def loadConfig():
         if "topics" in lamb and len(lamb["topics"])>0:
             nlamb["type_icon"]="regular/envelope"
             nlamb["type"]="message"
+        elif "restapi" in lamb and lamb["restapi"]!=None and len(lamb["restapi"])>0:
+            nlamb["type_icon"]="satellite-dish"
+            nlamb["type"]="restapi"
         else:                                      
             nlamb["type_icon"]="regular/clock"      
             nlamb["type"]="cron"
