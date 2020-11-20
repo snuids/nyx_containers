@@ -41,6 +41,7 @@ there is a syntax error in the lambda.
 * 20 Apr 2020 1.4.4  **AMA** Locales added in Dcke rfile
 * 12 May 2020 1.5.1  **AMA** Rest API allowed
 * 20 May 2020 1.5.2  **AMA** Use new elastic_helper
+* 22 Jun 2020 1.5.3  **AMA** Fix a bug that could prevent the cron jobs from being executed after an Elastic Search failure
 """
 import os
 import re
@@ -73,7 +74,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.5.2"
+VERSION="1.5.3"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
@@ -406,42 +407,45 @@ def logger_fatal(log,exc_info=False):
 # save_log
 #######################################################################################
 def save_log(logs,guid,lambdaname,runner,lamb,message=None,headers=None):
-    logger.info("Saving log")
-    body={"@timestamp":datetime.utcnow().isoformat(),"logs":logs,"uuid":guid
-                ,"orgfunction":lamb["orgfunction"],"function":lambdaname,"runner":runner,"errors":lamb["errors"]
-                ,"return":lamb["return"],"runs":lamb["runs"],"duration":lamb["duration"]
-                ,"crashed":lamb["crashed"]}
+    try:        
+        logger.info("Saving log")
+        body={"@timestamp":datetime.utcnow().isoformat(),"logs":logs,"uuid":guid
+                    ,"orgfunction":lamb["orgfunction"],"function":lambdaname,"runner":runner,"errors":lamb["errors"]
+                    ,"return":lamb["return"],"runs":lamb["runs"],"duration":lamb["duration"]
+                    ,"crashed":lamb["crashed"]}
 
-    if message!=None:
-        body["message"]=message[0:512]
+        if message!=None:
+            body["message"]=message[0:512]
 
-        jsonheaders=json.dumps(headers)
-        
-        try:
-            os.mkdir( path+"/inputs/"+lamb["orgfunction"]+"/")
-        except:
-            pass
+            jsonheaders=json.dumps(headers)
+            
+            try:
+                os.mkdir( path+"/inputs/"+lamb["orgfunction"]+"/")
+            except:
+                pass
 
-        if "saveinput" in lamb and lamb["saveinput"]:
-            file = open(path+"/inputs/"+lamb["orgfunction"]+"/"+guid+".txt","w") 
-            file.write(jsonheaders+"\r\n") 
-            file.write(message) 
-            file.close() 
-            logger.info("Delete files older than 3 days.")
-            resdelete=os.system("find "+path+"/inputs/"+" -mtime +3 -delete")
-            logger.info("Res="+str(resdelete))
-
-
-        body["headers"]=jsonheaders
-        body["inputuuid"]=guid
+            if "saveinput" in lamb and lamb["saveinput"]:
+                file = open(path+"/inputs/"+lamb["orgfunction"]+"/"+guid+".txt","w") 
+                file.write(jsonheaders+"\r\n") 
+                file.write(message) 
+                file.close() 
+                logger.info("Delete files older than 3 days.")
+                resdelete=os.system("find "+path+"/inputs/"+" -mtime +3 -delete")
+                logger.info("Res="+str(resdelete))
 
 
-    if elkversion <= 6:
-        es.index("nyx_lambdalog", id = guid, doc_type = "doc", body = body)
-    else:
-        es.index("nyx_lambdalog", id = guid, body = body)
+            body["headers"]=jsonheaders
+            body["inputuuid"]=guid
 
-    logger.info("Saved")
+
+        if elkversion <= 6:
+            es.index("nyx_lambdalog", id = guid, doc_type = "doc", body = body)
+        else:
+            es.index("nyx_lambdalog", id = guid, body = body)
+
+        logger.info("Saved")
+    except:
+        logger.error("Unable to save log.",exc_info=True)        
 
 
 ################################################################################
