@@ -33,7 +33,7 @@ packaging==19.0
 pandas==0.24.1
 passlib==1.7.1
 psycopg2==2.7.7
-Pygments==2.4.2
+Pygments==2.7.4
 pyparsing==2.3.1
 pypng==0.0.19
 PyQRCode==1.2.1
