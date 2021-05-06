@@ -15,7 +15,7 @@ docutils==0.14
 elastic-helper==1.2.3
 elasticsearch==6.3.1
 Flask==1.0.2
-Flask-Cors==3.0.7
+Flask-Cors==3.0.9
 gunicorn==19.9.0
 humanfriendly==4.18
 idna==2.7
