@@ -1,0 +1,14 @@
+./nyx_buildreport.py
+./nyx_formatconverter.py
+./demoreports/demopython.py
+./nyx_xlsimporter.py
+./nyx_monitordocker.py
+./nyx_buildreport_doc.py
+./nyx_skeleton.py
+./nyx_reportscheduler.py
+./lib/pandastoelastic.py
+./lib/__init__.py
+./lib/reporthelper.py
+./lib/elastictopandas.py
+./nyx_lambda.py
+./nyx_reportrunner.py

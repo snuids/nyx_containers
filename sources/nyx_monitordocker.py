@@ -26,34 +26,27 @@ VERSION HISTORY
 ===============
 
 * 11 May 2020 1.0.5 **AMA** First version
+* 09 Mar 2025 1.0.6 **AMA** Fix code
 """
 
-import re
 import json
 import time
-import uuid
-import base64
 import docker
-import threading
 import os,logging
 import platform
-import pandas as pd
 from functools import wraps
 from datetime import datetime,timedelta
-from elastic_helper import es_helper
 from amqstompclient import amqstompclient
 from logging.handlers import TimedRotatingFileHandler
 from logstash_async.handler import AsynchronousLogstashHandler
-from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
+from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
-VERSION="1.0.5"
+VERSION="1.0.6"
 MODULE="MonitorDocker"
 QUEUE=["/topic/DOCKER_COMMAND"]
 
-
-################################################################################
-def getELKVersion(es):
-    return int(es.info().get('version').get('number').split('.')[0])
+es=None
+client=None
 
 ################################################################################
 def messageReceived(destination,message,headers):
@@ -91,33 +84,34 @@ def load_data():
             "status":container.status,
             "image":container.attrs['Config']['Image'],
             "created":container.attrs['Created'],
-            "started":container.attrs['State']["StartedAt"]
+            "started":container.attrs['State']["StartedAt"],
+            "node":os.environ["NODE_NAME"]
         }
-        # if cont["status"]=="running":
-        #     stats=container.stats(stream=False)
-        #     cont["memory_used"]=stats["memory_stats"]["usage"]/1000000
-        #     cont["memory_used_mb"]=int(stats["memory_stats"]["usage"]/1000000)
-        #     cont["@timestamp"]=datetime.now().isoformat()
+        if cont["status"]=="running":
+            stats=container.stats(stream=False)
+            cont["memory_used"]=stats["memory_stats"]["usage"]/1000000
+            cont["memory_used_mb"]=int(stats["memory_stats"]["usage"]/1000000)
+            cont["@timestamp"]=datetime.now().isoformat()
 
-        #     if(('cpu_stats' in stats) and ('cpu_usage' in stats['cpu_stats'])
-        #         and ('total_usage' in stats['cpu_stats']['cpu_usage'])):
-        #             cpuvalue=stats['cpu_stats']['cpu_usage']['total_usage']
-        #             precpuvalue=stats['precpu_stats']['cpu_usage']['total_usage']
+            if(('cpu_stats' in stats) and ('cpu_usage' in stats['cpu_stats'])
+                and ('total_usage' in stats['cpu_stats']['cpu_usage'])):
+                    cpuvalue=stats['cpu_stats']['cpu_usage']['total_usage']
+                    precpuvalue=stats['precpu_stats']['cpu_usage']['total_usage']
 
-        #             cpuDelta = cpuvalue -  precpuvalue;
+                    cpuDelta = cpuvalue -  precpuvalue;
 
-        #             if('system_cpu_usage' in stats['cpu_stats']) and ('system_cpu_usage' in stats['precpu_stats']):
-        #                 systemvalue=stats['cpu_stats']['system_cpu_usage']
-        #                 presystemvalue=stats['precpu_stats']['system_cpu_usage']
-        #                 systemDelta = systemvalue - presystemvalue;
+                    if('system_cpu_usage' in stats['cpu_stats']) and ('system_cpu_usage' in stats['precpu_stats']):
+                        systemvalue=stats['cpu_stats']['system_cpu_usage']
+                        presystemvalue=stats['precpu_stats']['system_cpu_usage']
+                        systemDelta = systemvalue - presystemvalue;
 
-        #                 if (systemDelta >0):
+                        if (systemDelta >0):
 
-        #                     RESULT_CPU_USAGE = float(cpuDelta) / float(systemDelta) * 100.0
+                            RESULT_CPU_USAGE = float(cpuDelta) / float(systemDelta) * 100.0
 
-        #                     cont['cpu_percent']=round(RESULT_CPU_USAGE,2)
+                            cont['cpu_percent']=round(RESULT_CPU_USAGE,2)
         #print(cont)
-        id=container.name.replace(" ","").lower()
+        iD=container.name.replace(" ","").lower()
 
         if cont["status"]=="running":
             cont["result_icon"]="regular/check-circle>#0F9D58"
@@ -126,14 +120,11 @@ def load_data():
 
 
         action={}
-        if elkversion<=6:
-            action["index"] = {"_index": "docker_status",
-                               "_type": "_doc","_id":id}
-        else:
-            action["index"] = {"_index": "docker_status","_id":id}
+        action["index"] = {"_index": "docker_status","_id":iD}
 
+        #print(bulkbody)
         bulkbody+=json.dumps(action)+"\r\n"
-        bulkbody+=json.dumps(cont)+"\r\n"  
+        bulkbody+=json.dumps(cont)+"\r\n"
 
     logger.info("BULK")
     res=es.bulk(bulkbody)  
@@ -141,8 +132,7 @@ def load_data():
         logger.info(res)
     logger.info(">>>Load Data............................")
 
-client=None
-elkversion=6
+
 
 if __name__ == '__main__':    
     logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(module)s - %(funcName)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
@@ -150,7 +140,7 @@ if __name__ == '__main__':
 
     lshandler=None
 
-    if os.environ["USE_LOGSTASH"]=="true":
+    if os.environ.get("USE_LOGSTASH",False)=="true":
         logger.info ("Adding logstash appender")
         lshandler=AsynchronousLogstashHandler("logstash", 5001, database_path='logstash_test.db')
         lshandler.setLevel(logging.ERROR)
@@ -172,16 +162,14 @@ if __name__ == '__main__':
 
     #>> AMQC
     server={"ip":os.environ["AMQC_URL"],"port":os.environ["AMQC_PORT"]
-                    ,"login":os.environ["AMQC_LOGIN"],"password":os.environ["AMQC_PASSWORD"]}
+                   ,"login":os.environ["AMQC_LOGIN"],"password":os.environ["AMQC_PASSWORD"]}
             
 
     conn=amqstompclient.AMQClient(server
-        , {"name":MODULE,"version":VERSION,"lifesign":"/topic/NYX_MODULE_INFO"},QUEUE,callback=messageReceived)
-    #conn,listener= amqHelper.init_amq_connection(activemq_address, activemq_port, activemq_user,activemq_password, "RestAPI",VERSION,messageReceived)
-    connectionparameters={"conn":conn}
+       , {"name":MODULE,"version":VERSION,"lifesign":"/topic/NYX_MODULE_INFO"},QUEUE,callback=messageReceived)
 
     #>> ELK
-    es=None
+    
     logger.info (os.environ["ELK_SSL"])
 
     if os.environ["ELK_SSL"]=="true":
@@ -191,13 +179,12 @@ if __name__ == '__main__':
         host_params="http://"+os.environ["ELK_URL"]+":"+os.environ["ELK_PORT"]
         es = ES(hosts=[host_params])
 
-    elkversion=getELKVersion(es)    
-
+    
 
     logger.info("AMQC_URL          :"+os.environ["AMQC_URL"])
     client = docker.from_env()
 
-    lastrun=datetime.now()
+    lastrun=datetime.now()-timedelta(seconds=60)
 
     while True:
         time.sleep(5)

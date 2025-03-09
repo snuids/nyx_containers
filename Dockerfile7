@@ -1,21 +1,22 @@
-FROM python:3.7.3-slim
-MAINTAINER lapin
+FROM python:3.11.3-alpine
+LABEL maintainer="snuids,lapin,lamenuiserie"
 
-RUN apt-get update
-RUN apt-get install -y vim
+#RUN apt-get update
+#RUN apt-get install -y vim
 
 COPY ./sources/requirements7.txt /opt/sources/requirements.txt
 RUN pip install -r /opt/sources/requirements.txt
 
 COPY ./sources /opt/sources
-RUN rm -d -r /opt/sources/logs
+#RUN rm -d -r /opt/sources/logs
 RUN mkdir  /opt/sources/logs
-RUN rm -d -r /opt/sources/*.sh
+RUN rm -r /opt/sources/*.sh
 #RUN rm -d -r /opt/sources/*.bat
 #RUN rm -d -r /opt/sources/jaspergenerator
 #RUN rm -d -r /opt/sources/reports
 
 WORKDIR /opt/sources
+CMD ["python", "nyx_monitordocker.py"]
 #CMD ["python", "nyx_xlsimporter.py"]
 #CMD ["python", "nyx_reportrunner.py"]
 #CMD ["python", "biac_compute_instawork.py"]
@@ -29,7 +30,7 @@ WORKDIR /opt/sources
 #CMD ["python", "biac_import_bags.py"]
 #CMD ["python","biac_import_bags.py"]
 #CMD ["python","biac_mails.py"]
-CMD ["python","nyx_reportscheduler.py"]
+#CMD ["python","nyx_reportscheduler.py"]
 #CMD ["python", "biac_mails.py"]
 #CMD ["python", "biac_import_kpi305_501.py"]
 #CMD ["python","nyx_formatconverter.py"]
