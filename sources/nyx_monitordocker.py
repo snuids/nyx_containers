@@ -81,6 +81,7 @@ def load_data():
     for container in client.containers.list(all=True):        
         cont={
             "name":container.name,
+            "shortname":container.name.split(".")[0],
             "status":container.status,
             "image":container.attrs['Config']['Image'],
             "created":container.attrs['Created'],
