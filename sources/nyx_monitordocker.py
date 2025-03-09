@@ -41,8 +41,8 @@ from logging.handlers import TimedRotatingFileHandler
 from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
-VERSION="1.0.6"
-MODULE="MonitorDocker"
+VERSION="1.0.7"
+MODULE="MonitorDocker-"+os.environ["NODE_NAME"]
 QUEUE=["/topic/DOCKER_COMMAND"]
 
 es=None
