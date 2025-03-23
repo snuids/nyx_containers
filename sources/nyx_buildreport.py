@@ -14,7 +14,7 @@ import collections
 import numpy as np
 import pandas as pd
 matplotlib.use('TkAgg')
-from docx import Document
+#from docx import Document
 from datetime import timezone
 from datetime import datetime
 from docx.shared import Inches
