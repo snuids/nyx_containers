@@ -21,7 +21,8 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from dateutil.parser import parse
 from elastic_helper import es_helper
-from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
+#from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
+from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 logging.basicConfig()
 logger = logging.getLogger()
