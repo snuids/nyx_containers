@@ -17,7 +17,7 @@ matplotlib.use('TkAgg')
 #from docx import Document
 from datetime import timezone
 from datetime import datetime
-from docx.shared import Inches
+#from docx.shared import Inches
 import matplotlib.pyplot as plt
 from dateutil.parser import parse
 from elastic_helper import es_helper
