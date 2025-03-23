@@ -34,6 +34,7 @@ VERSION HISTORY
 * 26 Mar 2020 1.8.6 **AMA** Better localization of date parameters
 * 26 Mar 2020 1.9.0 **AMA** datetime imported by default
 * 29 Apr 2020 1.9.1 **AMA** Linked with jasper 6.12
+* 23 Mar 2025 1.9.2 **AMA** Linked with jasper 6.12
 """
 
 import os
@@ -56,11 +57,12 @@ from dateutil.parser import parse
 from amqstompclient import amqstompclient
 from logging.handlers import TimedRotatingFileHandler
 from logstash_async.handler import AsynchronousLogstashHandler
-from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
+from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.1"
+VERSION="1.9.2"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
+
 
 ################################################################################
 def messageReceived(destination,message,headers):
@@ -124,7 +126,13 @@ def messageReceivedReport(destination,message,headers):
     status="Finished"
     errormessage=""
     messagejson=json.loads(message)
-
+    logger.info("#==> "*50)
+    #messagejson=json.loads(messagejson)
+    logger.info(messagejson)
+    logger.info("#==> "*50)
+    logger.info(messagejson["treatment"])
+    logger.info("==> "*50)
+    
     messagejson["treatment"]["start"]=datetime.now().isoformat()
     starttime=datetime.now()
     messagejson["report"]=json.loads(messagejson["report"])
