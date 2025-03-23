@@ -128,7 +128,7 @@ prepath = "./reports/notebooks/"
 # ELASTIC SEARCH
 
 if not localmode:
-    host_params="http://esnodebal:9200"
+    host_params="http://elasticsearch:9200"
     es = ES(hosts=[host_params])
     print(es.info())
 else:        
