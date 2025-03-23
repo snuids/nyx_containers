@@ -15,10 +15,12 @@ kiwisolver==1.4.8
 limits==4.1
 matplotlib==3.10.1
 numpy==2.2.3
+openpyxl==3.0.2
 opensearch-py==2.8.0
 packaging==24.2
 pandas==2.2.3
 pillow==11.1.0
+python-docx==0.8.10
 pylogbeat==2.0.1
 pyparsing==3.2.1
 python-dateutil==2.9.0.post0
