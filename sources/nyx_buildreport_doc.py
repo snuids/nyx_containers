@@ -22,8 +22,8 @@ import matplotlib.pyplot as plt
 from dateutil.parser import parse
 from elastic_helper import es_helper
 from docx.text.paragraph import Paragraph
-from docx.oxml.xmlchemy import OxmlElement
-from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
+#from docx.oxml.xmlchemy import OxmlElement
+from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 logging.basicConfig()
 logger = logging.getLogger()
