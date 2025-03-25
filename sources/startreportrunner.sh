@@ -7,7 +7,7 @@ export AMQC_LOGIN="admin"
 export AMQC_PASSWORD="BagStage01!"
 export AMQC_PORT=61613
 
-export ELK_URL="localhost"
+export ELK_URL="10.0.10.161"
 export ELK_LOGIN=""
 export ELK_PASSWORD=""
 export ELK_PORT=9200
