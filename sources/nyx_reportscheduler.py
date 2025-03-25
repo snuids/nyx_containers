@@ -36,7 +36,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 from dateutil import parser
 
-VERSION="1.0.1"
+VERSION="1.0.2"
 MODULE="ReportScheduler"
 QUEUE=[]
 
