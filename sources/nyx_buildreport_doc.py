@@ -17,9 +17,11 @@ from datetime import datetime
 from docx.shared import Inches
 import matplotlib.pyplot as plt
 from dateutil.parser import parse
+from docx.oxml import OxmlElement
 from elastic_helper import es_helper
 from docx.text.paragraph import Paragraph
 #from docx.oxml.xmlchemy import OxmlElement
+from docx.text.paragraph import Paragraph
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 logging.basicConfig()
