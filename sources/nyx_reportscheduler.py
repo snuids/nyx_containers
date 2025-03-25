@@ -36,7 +36,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 from dateutil import parser
 
-VERSION="1.0.4"
+VERSION="1.0.5"
 MODULE="ReportScheduler"
 QUEUE=[]
 
@@ -95,7 +95,7 @@ def execute_report(duetime,task):
     logger.info(">>>>>>>>>>> Executing task..............")
     logger.info(task)
     try:
-        report=es.get(doc_type="doc",index="nyx_reportdef",id=task["report"])
+        report=es.get(doc_type="_doc",index="nyx_reportdef",id=task["report"])
     except:
         report=es.get(index="nyx_reportdef",id=task["report"])
 
