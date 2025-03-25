@@ -44,7 +44,7 @@ def resize_table(table, size_array):
 def save_log():
     logger.info("Saving log")
     body={"@timestamp":datetime.now().isoformat(),"logs":logs}
-    es.index("nyx_reportlog",id=report["id"],doc_type="doc",body=body)
+    es.index("nyx_reportlog",id=report["id"],body=body)
     logger.info("Saved")
 
 #######################################################################################
@@ -217,6 +217,7 @@ logger_info("*"*90)
 # ELASTIC SEARCH
 
 if not localmode:
+    #host_params="http://10.0.10.161:9200"
     host_params="http://elasticsearch:9200"
     es = ES(hosts=[host_params])
     print(es.info())
@@ -300,6 +301,9 @@ for table in template.tables:
                             exec(reportfunctions[match])
                         except:
                             logger_error("Function crashed.",exc_info=True)
+                            logger_info("====>"*30)
+                            logger_info(reportfunctions[match])
+                            logger_info("====>"*30)
                             tb = traceback.format_exc()
                             for trace in ["TRACE:"+_ for _ in tb.split("\n")]:
                                 logger_info(trace)
