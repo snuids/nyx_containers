@@ -10,6 +10,7 @@ import datetime
 import traceback
 import cachetools
 import matplotlib
+matplotlib.use('TKAgg')
 import collections
 import numpy as np
 import pandas as pd
