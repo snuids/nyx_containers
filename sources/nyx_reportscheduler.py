@@ -36,7 +36,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 from dateutil import parser
 
-VERSION="1.0.3"
+VERSION="1.0.4"
 MODULE="ReportScheduler"
 QUEUE=[]
 
@@ -217,7 +217,7 @@ def checkTasks():
                     
                     task["_source"]["nextRun"]=nextrun2.isoformat()
                     try:
-                        resind=es.index(index=task["_index"],doc_type="doc",id=task["_id"],body=task["_source"])
+                        resind=es.index(index=task["_index"],doc_type="_doc",id=task["_id"],body=task["_source"])
                     except:
                         resind=es.index(index=task["_index"],id=task["_id"],body=task["_source"])
 
