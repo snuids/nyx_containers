@@ -16,7 +16,7 @@ idna==3.10
 kiwisolver==1.4.8
 limits==4.1
 lxml==5.3.1
-matplotlib==3.0.2
+matplotlib==3.10.1
 numpy==2.2.3
 openpyxl==3.1.5
 opensearch-py==2.8.0
