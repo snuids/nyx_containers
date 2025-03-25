@@ -3,6 +3,7 @@ LABEL maintainer="snuids,lapin,lamenuiserie"
 
 #RUN apt-get update
 #RUN apt-get install -y vim
+RUN apk add  tk
 
 COPY ./sources/requirements7.txt /opt/sources/requirements.txt
 RUN pip install -r /opt/sources/requirements.txt
