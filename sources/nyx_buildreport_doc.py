@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('TkAgg')
 
 import os
 import re
@@ -9,12 +11,9 @@ import tzlocal
 import datetime
 import traceback
 import cachetools
-import matplotlib
-matplotlib.use('TKAgg')
 import collections
 import numpy as np
 import pandas as pd
-matplotlib.use('TkAgg')
 from docx import Document
 from datetime import timezone
 from datetime import datetime
