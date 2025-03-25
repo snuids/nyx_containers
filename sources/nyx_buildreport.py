@@ -34,7 +34,7 @@ logger.setLevel(logging.INFO)
 def save_log():
     logger.info("Saving log")
     body={"@timestamp":datetime.now().isoformat(),"logs":logs}
-    es.index("nyx_reportlog",id=report["id"],doc_type="doc",body=body)
+    es.index("nyx_reportlog",id=report["id"],body=body)
     logger.info("Saved")
 
 
