@@ -113,7 +113,7 @@ print(report["report"]["parameters"])
 
 params={}
 
-containertimezone=pytz.timezone(tzlocal.get_localzone().zone)
+containertimezone=pytz.timezone(tzlocal.get_localzone())
 
 for param in report["report"]["parameters"]:
     if param["type"]=="interval":
