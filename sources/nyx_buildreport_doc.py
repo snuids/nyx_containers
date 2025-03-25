@@ -184,7 +184,7 @@ logger_info("*"*90)
 
 params={}
 
-containertimezone=pytz.timezone(tzlocal.get_localzone().zone)
+containertimezone=tzlocal.get_localzone()
  
 for param in report["report"]["parameters"]:
     if param["type"]=="interval":

@@ -828,7 +828,7 @@ def check_intervals_and_cron():
                 if 'nextrun' not in lamb:
 
                     if 'crontab' in lamb and lamb['crontab']!=None:
-                        containertimezone=pytz.timezone(tzlocal.get_localzone().zone)
+                        containertimezone=tzlocal.get_localzone()
 
                         #lamb['nextrun'] = datetime.now(timezone.utc)+timedelta(seconds=lamb['crontab'].next(default_utc=True))
                         lamb['nextrun'] = datetime.now(containertimezone)+timedelta(seconds=lamb['crontab'].next(default_utc=False))

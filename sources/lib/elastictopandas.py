@@ -11,7 +11,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 
 #logger=logging.getLogger()
 
-containertimezone=pytz.timezone(tzlocal.get_localzone().zone)
+containertimezone=tzlocal.get_localzone()
 
 
 def genericIntervalSearch(es,index,query="*",start=None,end=None,doctype="doc",sort=None,timestampfield="@timestamp",_source=[] ,datecolumns=[]):
