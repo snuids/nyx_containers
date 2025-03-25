@@ -36,3 +36,5 @@ tzlocal==5.3.1
 urllib3==2.3.0
 websocket-client==1.8.0
 wrapt==1.17.2
+xlrd==1.2.0
+XlsxWriter==1.1.2
