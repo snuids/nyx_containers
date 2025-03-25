@@ -36,7 +36,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 from dateutil import parser
 
-VERSION="1.0.2"
+VERSION="1.0.3"
 MODULE="ReportScheduler"
 QUEUE=[]
 
@@ -195,7 +195,7 @@ def checkTasks():
     logger.info("Checking tasks....")
     docs=es.search(index="nyx_reportperiodic",size=10000)
     
-    containertimezone=pytz.timezone(tzlocal.get_localzone().zone)
+    containertimezone=tzlocal.get_localzone()
 
     for task in docs["hits"]["hits"]:
         #logger.info("TASK-"*10)
@@ -320,7 +320,7 @@ if __name__ == '__main__':
                     nextrun=datetime.now()+timedelta(seconds=SECONDSBETWEENCHECKS)
                     checkTasks()
                 except Exception as e2:
-                    logger.error("Unable to load kizeo.")
+                    logger.error("Unable to load tasks.")
                     logger.error(e2)
 
         except Exception as e:
