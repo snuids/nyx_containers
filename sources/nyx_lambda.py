@@ -72,7 +72,8 @@ from datetime import datetime, timezone
 from amqstompclient import amqstompclient
 from logging.handlers import TimedRotatingFileHandler
 from logstash_async.handler import AsynchronousLogstashHandler
-from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
+#from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
+from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
 VERSION="1.5.7"
@@ -439,10 +440,10 @@ def save_log(logs,guid,lambdaname,runner,lamb,message=None,headers=None):
             body["inputuuid"]=guid
 
 
-        if elkversion <= 6:
-            es.index("nyx_lambdalog", id = guid, doc_type = "doc", body = body)
-        else:
-            es.index("nyx_lambdalog", id = guid, body = body)
+        # if elkversion <= 6:
+        #     es.index("nyx_lambdalog", id = guid, doc_type = "doc", body = body)
+        # else:
+        es.index("nyx_lambdalog", id = guid, body = body)
 
         logger.info("Saved")
     except:
