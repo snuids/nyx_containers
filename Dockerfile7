@@ -31,7 +31,7 @@ WORKDIR /opt/sources
 #CMD ["python", "biac_import_bags.py"]
 #CMD ["python","biac_import_bags.py"]
 #CMD ["python","biac_mails.py"]
-CMD ["python","nyx_reportscheduler.py"]
+#CMD ["python","nyx_reportscheduler.py"]
 #CMD ["python", "biac_mails.py"]
 #CMD ["python", "biac_import_kpi305_501.py"]
 #CMD ["python","nyx_formatconverter.py"]
