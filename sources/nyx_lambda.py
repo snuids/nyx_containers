@@ -42,7 +42,7 @@ there is a syntax error in the lambda.
 * 12 May 2020 1.5.1  **AMA** Rest API allowed
 * 20 May 2020 1.5.2  **AMA** Use new elastic_helper
 * 22 Jun 2020 1.5.3  **AMA** Fix a bug that could prevent the cron jobs from being executed after an Elastic Search failure
-* 05 Jun 2025 1.5.7  **AMA** Becomes swarm compatible
+* 05 Jun 2025 1.5.8  **AMA** Becomes swarm compatible
 """
 import os
 import re
@@ -76,7 +76,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.5.7"
+VERSION="1.5.8"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
