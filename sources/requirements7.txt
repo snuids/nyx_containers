@@ -13,6 +13,7 @@ elasticsearch==6.3.1
 et_xmlfile==2.0.0
 Events==0.5
 fonttools==4.56.0
+humanfriendly==4.18
 idna==3.10
 kiwisolver==1.4.8
 limits==4.1
@@ -30,6 +31,7 @@ python-dateutil==2.9.0.post0
 python-docx==1.1.2
 python-logstash-async==4.0.1
 pytz==2025.1
+redis==5.2.1
 requests==2.32.3
 six==1.17.0
 stomp.py==4.1.21
