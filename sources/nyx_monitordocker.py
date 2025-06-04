@@ -64,7 +64,7 @@ def messageReceived(destination,message,headers):
 
     for container in client.containers.list(all=True):    
         if container.name==name:
-            logger.info("FOUND")
+            logger.info("FOUND:<"+command+">")
             if command=="restart":
                 container.restart()
             if command=="stop":
@@ -98,27 +98,31 @@ def load_data():
         }
         if cont["status"]=="running":
             stats=container.stats(stream=False)
-            cont["memory_used"]=stats["memory_stats"]["usage"]/1000000
-            cont["memory_used_mb"]=int(stats["memory_stats"]["usage"]/1000000)
-            cont["@timestamp"]=datetime.now().isoformat()
+            try:
+                cont["memory_used"]=stats["memory_stats"]["usage"]/1000000
+                cont["memory_used_mb"]=int(stats["memory_stats"]["usage"]/1000000)
+                cont["@timestamp"]=datetime.now().isoformat()
 
-            if(('cpu_stats' in stats) and ('cpu_usage' in stats['cpu_stats'])
-                and ('total_usage' in stats['cpu_stats']['cpu_usage'])):
-                    cpuvalue=stats['cpu_stats']['cpu_usage']['total_usage']
-                    precpuvalue=stats['precpu_stats']['cpu_usage']['total_usage']
+                if(('cpu_stats' in stats) and ('cpu_usage' in stats['cpu_stats'])
+                    and ('total_usage' in stats['cpu_stats']['cpu_usage'])):
+                        cpuvalue=stats['cpu_stats']['cpu_usage']['total_usage']
+                        precpuvalue=stats['precpu_stats']['cpu_usage']['total_usage']
 
-                    cpuDelta = cpuvalue -  precpuvalue;
+                        cpuDelta = cpuvalue -  precpuvalue;
 
-                    if('system_cpu_usage' in stats['cpu_stats']) and ('system_cpu_usage' in stats['precpu_stats']):
-                        systemvalue=stats['cpu_stats']['system_cpu_usage']
-                        presystemvalue=stats['precpu_stats']['system_cpu_usage']
-                        systemDelta = systemvalue - presystemvalue;
+                        if('system_cpu_usage' in stats['cpu_stats']) and ('system_cpu_usage' in stats['precpu_stats']):
+                            systemvalue=stats['cpu_stats']['system_cpu_usage']
+                            presystemvalue=stats['precpu_stats']['system_cpu_usage']
+                            systemDelta = systemvalue - presystemvalue;
 
-                        if (systemDelta >0):
+                            if (systemDelta >0):
 
-                            RESULT_CPU_USAGE = float(cpuDelta) / float(systemDelta) * 100.0
+                                RESULT_CPU_USAGE = float(cpuDelta) / float(systemDelta) * 100.0
 
-                            cont['cpu_percent']=round(RESULT_CPU_USAGE,2)
+                                cont['cpu_percent']=round(RESULT_CPU_USAGE,2)
+            except:
+                logger.error("Unable to get stats for container %s" % container.name, exc_info=True)
+
         #print(cont)
         iD=container.name.replace(" ","").lower()
 
@@ -209,8 +213,10 @@ if __name__ == '__main__':
         time.sleep(5)
         logger.info("Waiting for messages.................")
         try:
-            if lastrun+timedelta(seconds=30)<datetime.now():
+            if lastrun+timedelta(seconds=15)<datetime.now():
+                logger.info("Loading data from docker daemon")
                 load_data()
+                logger.info("Done")
                 lastrun=datetime.now()
         except:
             logger.error("Unable monitor docker.",exc_info=True)
