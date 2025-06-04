@@ -17,7 +17,7 @@ RUN rm -r /opt/sources/*.sh
 #RUN rm -d -r /opt/sources/reports
 
 WORKDIR /opt/sources
-#CMD ["python", "nyx_monitordocker.py"]
+CMD ["python", "nyx_monitordocker.py"]
 #CMD ["python", "nyx_xlsimporter.py"]
 #CMD ["python", "nyx_reportrunner.py"]
 #CMD ["python", "biac_compute_instawork.py"]
