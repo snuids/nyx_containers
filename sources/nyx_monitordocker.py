@@ -37,13 +37,15 @@ import platform
 from functools import wraps
 from datetime import datetime,timedelta
 from amqstompclient import amqstompclient
+#from lib.connect_amq import AMQPClient
 from logging.handlers import TimedRotatingFileHandler
 from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
-VERSION="1.0.7"
+VERSION="1.1.0"
 MODULE="MonitorDocker-"+os.environ["NODE_NAME"]
 QUEUE=["/topic/DOCKER_COMMAND"]
+
 
 es=None
 client=None
@@ -51,7 +53,9 @@ client=None
 ################################################################################
 def messageReceived(destination,message,headers):
     global es,FORCE_COMPUTATION
-    logger.info("==> "*10)
+    logger.info("==> "*100)
+    logger.info(headers)
+    logger.info("==> "*100)
     logger.info("Message Received %s" % destination)
     logger.info(message)
     jsonmes=json.loads(message)
@@ -77,6 +81,10 @@ def load_data():
     logger.info("Load Data............................")
     global elkversion
     bulkbody=""    
+
+    if client is None:
+        logger.error("Unable to connect to docker daemon. Is it running?")
+        return
 
     for container in client.containers.list(all=True):        
         cont={
@@ -169,6 +177,11 @@ if __name__ == '__main__':
     conn=amqstompclient.AMQClient(server
        , {"name":MODULE,"version":VERSION,"lifesign":"/topic/NYX_MODULE_INFO"},QUEUE,callback=messageReceived)
 
+    #handler = AMQPClient(os.environ["AMQC_URL"], os.environ["AMQC_LOGIN"], os.environ["AMQC_PASSWORD"],
+    #                    module={"name":MODULE,"version":VERSION},
+    #                     subscriptions=["topic://DOCKER_COMMAND"],
+    #                    message_handler=messageReceived)
+
     #>> ELK
     
     logger.info (os.environ["ELK_SSL"])
@@ -183,12 +196,18 @@ if __name__ == '__main__':
     
 
     logger.info("AMQC_URL          :"+os.environ["AMQC_URL"])
-    client = docker.from_env()
+
+    try:
+        client = docker.from_env()
+    except Exception as e:
+        logger.error("Unable to connect to docker daemon. Is it running?", exc_info=True)
+        
 
     lastrun=datetime.now()-timedelta(seconds=60)
 
     while True:
         time.sleep(5)
+        logger.info("Waiting for messages.................")
         try:
             if lastrun+timedelta(seconds=30)<datetime.now():
                 load_data()
@@ -196,10 +215,14 @@ if __name__ == '__main__':
         except:
             logger.error("Unable monitor docker.",exc_info=True)
                 
-        try:                      
+        try: 
             variables={"platform":"_/_".join(platform.uname()),"icon":"brands/docker"}
             variables["queue"]=",".join(QUEUE)  
-            conn.send_life_sign(variables=variables)
+            conn.send_life_sign(variables=variables)                     
+            #variables={"platform":"_/_".join(platform.uname()),"icon":"brands/docker"}            
+            #variables["type23"]="lifesign23"
+            #handler.send_message("queue://MASTER2", "TATATATA")
+            #handler.send_life_sign(variables=variables)
         except:
             logger.error("Unable to send life sign.",exc_info=True)
             
