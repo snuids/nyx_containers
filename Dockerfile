@@ -1,4 +1,4 @@
-FROM 3.11.3-alpine
+FROM python:3.9.3-slim
 #FROM python:3.7.3-slim
 MAINTAINER lapin
 
