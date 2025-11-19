@@ -58,4 +58,4 @@ WORKDIR /opt/sources
 #CMD ["python", "biac_feedback_dispatcher.py"]
 #CMD ["python", "gtc_sites_data.py"]
 #CMD ["python", "gtc_import_onerp.py"]
-CMD ["python","nyx_monitordocker.py"]
+#CMD ["python","nyx_monitordocker.py"]
