@@ -1,4 +1,4 @@
-amqstompclient==1.2.0
+amqstompclient==2.0.3
 cachetools==5.5.2
 certifi==2025.1.31
 charset-normalizer==3.4.1
