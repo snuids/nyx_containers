@@ -10,20 +10,21 @@ VERSION HISTORY
 * 19 Jun 2019 0.0.3 **AMA** Fix an UTC issue
 * 09 Jul 2019 0.0.4 **AMA** Mail subjects and attachments can be customized
 * 01 Apr 2020 1.0.1 **AMA** Use cron to compute next runs
+* 12 May 2020 1.0.2 **AMA** Use amqstompclient 2.0.0
+* 14 May 2020 1.0.3 **AMA** Fix issue with amqstompclient connection parameters
+* 29 Jan 2021 1.0.4 **AMA** Fix issue with date parameters* 
+* 03 Jan 2026 1.0.7 **AMA** Fix a report parameter issue
+ 
 """
 import re
 import json
 import time
 import uuid
-import pytz
-import base64
 import tzlocal
 import platform
 import traceback
-import threading
 import traceback
-import subprocess 
-import os,logging,sys
+import os,logging
 
 
 from crontab import CronTab
@@ -36,7 +37,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 from dateutil import parser
 
-VERSION="1.0.6"
+VERSION="1.0.7"
 MODULE="ReportScheduler"
 QUEUE=[]
 
@@ -99,7 +100,10 @@ def execute_report(duetime,task):
     except:
         report=es.get(index="nyx_reportdef",id=task["report"])
 
-    report["_source"]["parameters"] = task["_source"]["parameters"]
+
+    if "parameters" in task:
+        report["_source"]["parameters"] = task["parameters"]
+#    report["_source"]["parameters"] = task["_source"]["parameters"]
     logger.info(report)
     for parameter in report["_source"]["parameters"]:
         logger.info(parameter)
@@ -286,21 +290,27 @@ if __name__ == '__main__':
 
     #>> ELK
     es=None
+    logger.info("ELK_URL          :"+os.environ["ELK_URL"])
+    logger.info("ELK_PORT         :"+os.environ["ELK_PORT"])
+    logger.info("ELK_LOGIN        :"+os.environ["ELK_LOGIN"])
+    logger.info("ELK_PASSWORD     :********")   
     logger.info (os.environ["ELK_SSL"])
 
-    if os.environ["ELK_SSL"]=="true":
-        host_params = {'host':os.environ["ELK_URL"], 'port':int(os.environ["ELK_PORT"]), 'use_ssl':True}
+    if os.environ["ELK_SSL"]=="true":    
+        # Support full URLs with subdomains and paths
+        elk_url = os.environ["ELK_URL"]
+        if elk_url.startswith('http://') or elk_url.startswith('https://'):
+            host_params = elk_url
+        else:
+            host_params = "https://" + elk_url + ":" + os.environ["ELK_PORT"]
+        logger.info("ELK Host Params:"+str(host_params))
         es = ES([host_params], connection_class=RC, http_auth=(os.environ["ELK_LOGIN"], os.environ["ELK_PASSWORD"]),  use_ssl=True ,verify_certs=False)
     else:
-        host_params="http://"+os.environ["ELK_URL"]+":"+os.environ["ELK_PORT"]
-        es = ES(hosts=[host_params])
-
-
-    if os.environ["ELK_SSL"]=="true":
-        host_params = {'host':os.environ["ELK_URL"], 'port':int(os.environ["ELK_PORT"]), 'use_ssl':True}
-        es = ES([host_params], connection_class=RC, http_auth=(os.environ["ELK_LOGIN"], os.environ["ELK_PASSWORD"]),  use_ssl=True ,verify_certs=False)
-    else:
-        host_params="http://"+os.environ["ELK_URL"]+":"+os.environ["ELK_PORT"]
+        elk_url = os.environ["ELK_URL"]
+        if elk_url.startswith('http://') or elk_url.startswith('https://'):
+            host_params = elk_url
+        else:
+            host_params = "http://" + elk_url + ":" + os.environ["ELK_PORT"]
         es = ES(hosts=[host_params])
 
 
