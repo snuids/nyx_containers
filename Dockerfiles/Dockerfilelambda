@@ -1,9 +1,32 @@
 FROM python:3.11.3-alpine
 LABEL maintainer="lapin"
 
+# Install build dependencies and upgrade pip
+RUN apk add --no-cache --virtual .build-deps \
+    gcc \
+    g++ \
+    musl-dev \
+    libffi-dev \
+    libxml2-dev \
+    libxslt-dev \
+    libjpeg-turbo-dev \
+    zlib-dev \
+    freetype-dev \
+    openblas-dev \
+    lapack-dev \
+    gfortran \
+    && apk add --no-cache \
+    libxml2 \
+    libxslt \
+    libjpeg-turbo \
+    freetype \
+    openblas \
+    lapack
 
 COPY ./sources/requirements7.txt /opt/sources/requirements.txt
-RUN pip install -r /opt/sources/requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r /opt/sources/requirements.txt && \
+    apk del .build-deps
 
 #RUN apt-get install -y gcc python3-dev python3-pip libxml2-dev libxslt1-dev zlib1g-dev g++
 #RUN pip install pyodbc
