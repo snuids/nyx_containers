@@ -51,8 +51,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/nyx-lambda:v${{ steps.extract_version.outputs.version }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/nyx-lambda:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/nyx_lambda:v${{ steps.extract_version.outputs.version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/nyx_lambda:latest
           cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/nyx-lambda:buildcache
           cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/nyx-lambda:buildcache,mode=max
 
