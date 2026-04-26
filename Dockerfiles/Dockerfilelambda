@@ -5,23 +5,21 @@ LABEL maintainer="lapin"
 RUN apk add --no-cache --virtual .build-deps \
     gcc \
     g++ \
+    gfortran \
     musl-dev \
     libffi-dev \
     libxml2-dev \
     libxslt-dev \
-    libjpeg-turbo-dev \
+    jpeg-dev \
     zlib-dev \
     freetype-dev \
     openblas-dev \
-    lapack-dev \
-    gfortran \
     && apk add --no-cache \
     libxml2 \
     libxslt \
-    libjpeg-turbo \
+    jpeg \
     freetype \
-    openblas \
-    lapack
+    openblas
 
 COPY ./sources/requirements7.txt /opt/sources/requirements.txt
 RUN pip install --upgrade pip && \
