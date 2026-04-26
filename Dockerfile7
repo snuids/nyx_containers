@@ -5,11 +5,24 @@ LABEL maintainer="snuids,lapin,lamenuiserie"
 #RUN apt-get install -y vim
 RUN apk add  tk
 
+# Install build dependencies for compiling Python packages
+RUN apk add --no-cache --virtual .build-deps \
+    build-base \
+    gcc \
+    g++ \
+    musl-dev \
+    linux-headers \
+    freetype-dev \
+    libpng-dev
+
 COPY ./sources/requirements7.txt /opt/sources/requirements.txt
 RUN pip install -r /opt/sources/requirements.txt
 
+# Remove build dependencies to reduce image size
+RUN apk del .build-deps
+
 COPY ./sources /opt/sources
-#RUN rm -d -r /opt/sources/logs
+RUN rm -r /opt/sources/logs
 RUN mkdir  /opt/sources/logs
 RUN rm -r /opt/sources/*.sh
 #RUN rm -d -r /opt/sources/*.bat
@@ -17,7 +30,7 @@ RUN rm -r /opt/sources/*.sh
 #RUN rm -d -r /opt/sources/reports
 
 WORKDIR /opt/sources
-#CMD ["python", "nyx_monitordocker.py"]
+CMD ["python", "nyx_monitordocker.py"]
 #CMD ["python", "nyx_xlsimporter.py"]
 #CMD ["python", "nyx_reportrunner.py"]
 #CMD ["python", "biac_compute_instawork.py"]
@@ -31,7 +44,7 @@ WORKDIR /opt/sources
 #CMD ["python", "biac_import_bags.py"]
 #CMD ["python","biac_import_bags.py"]
 #CMD ["python","biac_mails.py"]
-CMD ["python","nyx_reportscheduler.py"]
+#CMD ["python","nyx_reportscheduler.py"]
 #CMD ["python", "biac_mails.py"]
 #CMD ["python", "biac_import_kpi305_501.py"]
 #CMD ["python","nyx_formatconverter.py"]
