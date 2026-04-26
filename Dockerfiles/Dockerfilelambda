@@ -1,5 +1,5 @@
 FROM python:3.11.3-alpine
-MAINTAINER lapin
+LABEL maintainer="lapin"
 
 
 COPY ./sources/requirements7.txt /opt/sources/requirements.txt
@@ -21,8 +21,7 @@ RUN pip install -r /opt/sources/requirements.txt
 
 COPY ./sources /opt/sources
 
-RUN rm -r /opt/sources/logs
-RUN mkdir  /opt/sources/logs
-RUN rm -r /opt/sources/*.sh
+RUN rm -rf /opt/sources/logs && mkdir -p /opt/sources/logs
+RUN rm -f /opt/sources/*.sh
 WORKDIR /opt/sources
 CMD ["python", "nyx_lambda.py"]
