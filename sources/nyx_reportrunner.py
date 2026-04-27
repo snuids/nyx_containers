@@ -29,12 +29,13 @@ VERSION HISTORY
 * 04 Feb 2020 1.6.4 **AMA** Better nyx_build_report file
 * 11 Feb 2020 1.6.5 **AMA** Built with latest eshelper 1.2.0
 * 05 Mar 2020 1.7.1 **AMA** Includes demo reports
-* 09 Mar 2020 1.7.2 **AMA** Chmod added after each copy of a demo file
-* 20 Mar 2020 1.8.0 **AMA** Jasper JDBC mode added
-* 26 Mar 2020 1.8.6 **AMA** Better localization of date parameters
-* 26 Mar 2020 1.9.0 **AMA** datetime imported by default
-* 29 Apr 2020 1.9.1 **AMA** Linked with jasper 6.12
-* 23 Mar 2025 1.9.2 **AMA** Linked with jasper 6.12
+* 09 Mar 2020 1.7.2  **AMA** Chmod added after each copy of a demo file
+* 20 Mar 2020 1.8.0  **AMA** Jasper JDBC mode added
+* 26 Mar 2020 1.8.6  **AMA** Better localization of date parameters
+* 26 Mar 2020 1.9.0  **AMA** datetime imported by default
+* 29 Apr 2020 1.9.1  **AMA** Linked with jasper 6.12
+* 23 Mar 2025 1.9.2  **AMA** Linked with jasper 6.12
+* 27 Apr 2026 1.9.20 **AMA** ARM compatible build
 """
 
 import os
@@ -60,7 +61,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.2"
+VERSION="1.9.20"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
