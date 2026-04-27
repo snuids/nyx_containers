@@ -53,8 +53,8 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/nyx-reportrunner:v${{ steps.extract_version.outputs.version }}
             ${{ secrets.DOCKERHUB_USERNAME }}/nyx-reportrunner:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/nyx-reportrunner:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/nyx-reportrunner:buildcache,mode=max
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/nyx_reportrunner:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/nyx_reportrunner:buildcache,mode=max
 
       - name: Image digest
         run: echo "Image pushed successfully with version v${{ steps.extract_version.outputs.version }}"
