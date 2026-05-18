@@ -36,7 +36,7 @@ VERSION HISTORY
 * 29 Apr 2020 1.9.1  **AMA** Linked with jasper 6.12
 * 23 Mar 2025 1.9.2  **AMA** Linked with jasper 6.12
 * 27 Apr 2026 1.9.20 **AMA** ARM compatible build
-* 18 May 2026 1.9.21 **AMA** Added jasper API call logs
+* 18 May 2026 1.9.22 **AMA** Added jasper API call logs
 """
 
 import os
