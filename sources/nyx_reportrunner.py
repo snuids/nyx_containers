@@ -63,7 +63,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.21"
+VERSION="1.9.22"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
@@ -199,25 +199,36 @@ def messageReceivedReport(destination,message,headers):
             # Fetch datasource configuration from Elasticsearch
             #datasource_doc = es.get(index="nyx_datasource", id=messagejson["report"]["datasource"])
             #logger.info("Datasource fetched from ES: " + str(datasource_doc))
-            
-            postbody={
-                "jsonUrl":os.environ["DATA_SOURCE_API"]+messagejson["report"]["datasource"]+"?token="+messagejson["creds"]["token"]+"&flat=true",
-                "token":messagejson["creds"]["token"],
-                "template":messagejson["report"]["jasper"],
-                "parameters":messagejson["report"]["parameters"],
-                "outputName":messagejson["output"].split("/")[-1]
-            }
-        
-            logger.info("===>"*10)
-            logger.info("Calling:"+os.environ["JASPER_API"])
-            logger.info("Posting to Jasper Generator API: " + json.dumps(postbody))
-            
-            # POST request to JASPER_API
-            response = requests.post(os.environ["JASPER_API"], json=postbody)
-            logger.info("JASPER_API response status: " + str(response.status_code))
-            logger.info("JASPER_API response: " + response.text)            
-            
-            logger.info("===>"*10)
+            if not "datasource" in messagejson["report"]:
+                status="Error"
+                errormessage="Datasource not defined for Jasper report"
+                logger.error(errormessage)
+            else:
+                postbody={
+                    "jsonUrl":os.environ["DATA_SOURCE_API"]+messagejson["report"]["datasource"]+"?token="+messagejson["creds"]["token"]+"&flat=true",
+                    "token":messagejson["creds"]["token"],
+                    "template":messagejson["report"]["jasper"],
+                    "parameters":messagejson["report"]["parameters"],
+                    "outputName":messagejson["output"].split("/")[-1]
+                }
+                for param in messagejson["report"]["parameters"]:
+                    if param["type"]=="interval":
+                        postbody["jsonUrl"]=postbody["jsonUrl"]+"&start="+param["value"][0]+"&end="+param["value"][1]
+                logger.info("===>"*10)
+                logger.info("Calling:"+os.environ["JASPER_API"])
+                logger.info("Posting to Jasper Generator API: " + json.dumps(postbody))
+                
+                # POST request to JASPER_API
+                response = requests.post(os.environ["JASPER_API"], json=postbody)
+                if response.status_code != 200:
+                    logger.error("JASPER_API call failed with status: " + str(response.status_code))
+                    errormessage=response.json().get("message", "Unknown error")
+                    status="Error"
+                else:
+                    logger.info("JASPER_API response status: " + str(response.status_code))
+                    logger.info("JASPER_API response: " + response.text)            
+                
+                logger.info("===>"*10)
         elif reporttype=="jasper_jdbc":
             path='/'.join(jasper.split('/')[0:-1])
             logger.info("PATH="+path)
