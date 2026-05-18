@@ -36,6 +36,7 @@ VERSION HISTORY
 * 29 Apr 2020 1.9.1  **AMA** Linked with jasper 6.12
 * 23 Mar 2025 1.9.2  **AMA** Linked with jasper 6.12
 * 27 Apr 2026 1.9.20 **AMA** ARM compatible build
+* 18 May 2026 1.9.21 **AMA** Added jasper API call logs
 """
 
 import os
@@ -49,6 +50,7 @@ import tzlocal
 import threading
 import subprocess 
 import traceback
+import requests
 import os,logging,sys
 
 
@@ -61,7 +63,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.20"
+VERSION="1.9.21"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
@@ -148,7 +150,7 @@ def messageReceivedReport(destination,message,headers):
 
     logger.info("Report Type:"+reporttype)
 
-    if reporttype=="jasper" or reporttype=="jasper_jdbc":
+    if reporttype=="jasper_jdbc":
         if "jasper" not in messagejson["report"]:
             status="Error"
             errormessage="Jasper not defined"
@@ -186,15 +188,37 @@ def messageReceivedReport(destination,message,headers):
         else:
             exec=messagejson["report"]["exec"]
             logger.info("Checkin path:"+exec)
-            if not os.path.exists(exec):
+            if reporttype != "jasper" and not os.path.exists(exec):
                 logger.error("Python file "+exec+" does not exist.")
                 status="Error"
                 errormessage="Python file "+exec+" does not exist."
 
     if errormessage=="":        
         
-
-        if reporttype=="jasper" or reporttype=="jasper_jdbc":
+        if reporttype=="jasper":
+            # Fetch datasource configuration from Elasticsearch
+            #datasource_doc = es.get(index="nyx_datasource", id=messagejson["report"]["datasource"])
+            #logger.info("Datasource fetched from ES: " + str(datasource_doc))
+            
+            postbody={
+                "jsonUrl":os.environ["DATA_SOURCE_API"]+messagejson["report"]["datasource"]+"?token="+messagejson["creds"]["token"]+"&flat=true",
+                "token":messagejson["creds"]["token"],
+                "template":messagejson["report"]["jasper"],
+                "parameters":messagejson["report"]["parameters"],
+                "outputName":messagejson["output"].split("/")[-1]
+            }
+        
+            logger.info("===>"*10)
+            logger.info("Calling:"+os.environ["JASPER_API"])
+            logger.info("Posting to Jasper Generator API: " + json.dumps(postbody))
+            
+            # POST request to JASPER_API
+            response = requests.post(os.environ["JASPER_API"], json=postbody)
+            logger.info("JASPER_API response status: " + str(response.status_code))
+            logger.info("JASPER_API response: " + response.text)            
+            
+            logger.info("===>"*10)
+        elif reporttype=="jasper_jdbc":
             path='/'.join(jasper.split('/')[0:-1])
             logger.info("PATH="+path)
 
@@ -381,7 +405,13 @@ if __name__ == '__main__':
     logger.info (os.environ["ELK_SSL"])
 
     if os.environ["ELK_SSL"]=="true":
-        host_params = {'host':os.environ["ELK_URL"], 'port':int(os.environ["ELK_PORT"]), 'use_ssl':True}
+        # Split ELK_URL into host and path (if path exists)
+        elk_url = os.environ["ELK_URL"]
+        if "/" in elk_url:
+            host, path = elk_url.split("/", 1)
+            host_params = "https://" + host + ":" + os.environ["ELK_PORT"] + "/" + path
+        else:
+            host_params = "https://" + elk_url + ":" + os.environ["ELK_PORT"]
         es = ES([host_params], connection_class=RC, http_auth=(os.environ["ELK_LOGIN"], os.environ["ELK_PASSWORD"]),  use_ssl=True ,verify_certs=False)
     else:
         host_params="http://"+os.environ["ELK_URL"]+":"+os.environ["ELK_PORT"]
