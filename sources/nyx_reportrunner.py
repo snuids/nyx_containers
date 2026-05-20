@@ -37,6 +37,7 @@ VERSION HISTORY
 * 23 Mar 2025 1.9.2  **AMA** Linked with jasper 6.12
 * 27 Apr 2026 1.9.20 **AMA** ARM compatible build
 * 18 May 2026 1.9.22 **AMA** Added jasper API call logs
+* 20 May 2026 1.9.23 **AMA** Changed handling of Jasper API response. Now checks the status code and logs the response content. If the call fails, it logs the error message from the response (if available) or a generic error message.   
 """
 
 import os
@@ -63,7 +64,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.22"
+VERSION="1.9.23"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
@@ -154,13 +155,13 @@ def messageReceivedReport(destination,message,headers):
         if "jasper" not in messagejson["report"]:
             status="Error"
             errormessage="Jasper not defined"
-        else:
-            jasper=messagejson["report"]["jasper"]
-            logger.info("Checkin path:"+jasper)
-            if not os.path.exists(jasper):
-                logger.error("Jasper file "+jasper+" does not exist.")
-                status="Error"
-                errormessage="Jasper file "+jasper+" does not exist."
+        # else:
+        #     jasper=messagejson["report"]["jasper"]
+        #     logger.info("Checkin path:"+jasper)
+        #     if not os.path.exists(jasper):
+        #         logger.error("Jasper file "+jasper+" does not exist.")
+        #         status="Error"
+        #         errormessage="Jasper file "+jasper+" does not exist."
     else:
         if "exec" not in messagejson["report"]:
             status="Error"
@@ -195,24 +196,32 @@ def messageReceivedReport(destination,message,headers):
 
     if errormessage=="":        
         
-        if reporttype=="jasper":
+        if reporttype=="jasper" or reporttype=="jasper_jdbc":
             # Fetch datasource configuration from Elasticsearch
             #datasource_doc = es.get(index="nyx_datasource", id=messagejson["report"]["datasource"])
             #logger.info("Datasource fetched from ES: " + str(datasource_doc))
-            if not "datasource" in messagejson["report"]:
+            if reporttype=="jasper" and not "datasource" in messagejson["report"]:
                 status="Error"
                 errormessage="Datasource not defined for Jasper report"
                 logger.error(errormessage)
             else:
                 postbody={
-                    "jsonUrl":os.environ["DATA_SOURCE_API"]+messagejson["report"]["datasource"]+"?token="+messagejson["creds"]["token"]+"&flat=true",
+                    
                     "token":messagejson["creds"]["token"],
                     "template":messagejson["report"]["jasper"],
                     "parameters":messagejson["report"]["parameters"],
                     "outputName":messagejson["output"].split("/")[-1]
                 }
+                if reporttype=="jasper":
+                    postbody["jsonUrl"]=os.environ["DATA_SOURCE_API"]+messagejson["report"]["datasource"]+"?token="+messagejson["creds"]["token"]+"&flat=true"
+                else:
+                    postbody["jdbc_driver"]=messagejson["report"]["jdbc_driver"]
+                    postbody["jdbc_url"]=messagejson["report"]["jdbc_url"]
+                    postbody["jdbc_login"]=messagejson["report"]["jdbc_login"]
+                    postbody["jdbc_password"]=messagejson["report"]["jdbc_password"]
+                
                 for param in messagejson["report"]["parameters"]:
-                    if param["type"]=="interval":
+                    if param["type"]=="interval" and "jsonUrl" in postbody:
                         postbody["jsonUrl"]=postbody["jsonUrl"]+"&start="+param["value"][0]+"&end="+param["value"][1]
                 logger.info("===>"*10)
                 logger.info("Calling:"+os.environ["JASPER_API"])
@@ -229,68 +238,7 @@ def messageReceivedReport(destination,message,headers):
                     logger.info("JASPER_API response: " + response.text)            
                 
                 logger.info("===>"*10)
-        elif reporttype=="jasper_jdbc":
-            path='/'.join(jasper.split('/')[0:-1])
-            logger.info("PATH="+path)
-
-            containertimezone=tzlocal.get_localzone()
-
-            def convert_dt(adate):
-                return "DATE@"+parse(adate).astimezone(containertimezone).strftime("%Y%m%d%H%M%S")
-
-            todo_params=[]
-            for param in messagejson["report"]["parameters"]: 
-                if param["type"]=="text":   
-                    todo_params.append(param["name"]+"="+param["value"])
-                elif param["type"]=="interval":   
-                    todo_params.append(param["name"]+"_start="+convert_dt(param["value"][0]))
-                    todo_params.append(param["name"]+"_end="+convert_dt(param["value"][1]))
-                elif param["type"]=="date":   
-                    todo_params.append(param["name"]+"="+convert_dt(param["value"]))
-                else:
-                    todo_params.append(param["name"]+"="+param["value"])
-            
-
-            logger.info("Preparing Jasper TODO...")
-            todo_exports=""
-
-            for export in messagejson["report"]["output"]:   
-                logger.info(export)
-                todo_exports+=export.upper()+","
-
-            todo_exports=todo_exports.strip(",")
-
-            todo="Jasper=../"+messagejson["report"]["jasper"]+"\r\n"
-            todo+="Parameters="+"&".join(todo_params)+"\r\n"
-            todo+="Export="+todo_exports+"\r\n"
-            if reporttype=="jasper":
-                todo+="DataSource="+os.environ["JDBC_DS"]+"\r\n"
-                todo+="Driver=com.amazon.opendistroforelasticsearch.jdbc.Driver\r\n"
-                todo+="DBUser="+os.environ["ELK_LOGIN"]+"\r\n"
-                todo+="DBPassword="+os.environ["ELK_PASSWORD"]+"\r\n"
-            else:
-                todo+="DataSource="+messagejson["report"]["jdbc_url"]+"\r\n"
-                todo+="Driver="+messagejson["report"]["jdbc_driver"]+"\r\n"
-                todo+="DBUser="+messagejson["report"]["jdbc_login"]+"\r\n"
-                try:    # TRY with OS environment variable first
-                    todo+="DBPassword="+os.environ[messagejson["report"]["jdbc_password"]]+"\r\n"
-                except:
-                    todo+="DBPassword="+messagejson["report"]["jdbc_password"]+"\r\n"
-
-            todo+="Output="+messagejson["output"]+"\r\n"
-
-            jobtodopath="./jaspergenerator/job2todo"+os.environ["RUNNER"]
-            logger.info(jobtodopath)
-            f = open(jobtodopath+".txt",'w')
-            f.write(todo)
-            f.close()
-
-            ret=subprocess.Popen(["java","-jar","JasperReportGenerator.jar","job2todo"+os.environ["RUNNER"]+".txt"],cwd="./jaspergenerator", stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            stdout = ret.communicate()[0]
-            for line in stdout.decode("utf-8").split('\n'):
-                logger.info(line)
-            logger.info("Java Return Code:")
-            logger.info(ret.returncode)
+        
         elif reporttype=="notebook_doc":            
             path="."
             logger.info("PATH="+path)
