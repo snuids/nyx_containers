@@ -4,5 +4,5 @@ Export=PDF
 DataSource=jdbc:postgresql://test2.nyx-ds.com:5444/nyx
 Driver=org.postgresql.Driver
 DBUser=nyx
-DBPassword=***REMOVED***
+DBPassword=
 Output=/Users/snuids/Documents/GitHub/nyx_containers/generated/id_27668596_31041029
