@@ -21,14 +21,18 @@ jobs:
 
       - name: Extract version from commit message
         id: extract_version
+        env:
+          # Passed through the environment rather than interpolated into the
+          # script below: a commit message containing quotes would otherwise
+          # break the shell and fail the step with exit code 127.
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          VERSION=$(echo "$COMMIT_MSG" | grep -oP 'lambda:v\K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+          VERSION=$(printf '%s\n' "$COMMIT_MSG" | grep -oP 'lambda:v\K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
           if [ -z "$VERSION" ]; then
             echo "ERROR: No version found in commit message. Expected format: lambda:v1.0.0"
             exit 1
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Extracted version: $VERSION"
 
       - name: Set up QEMU
