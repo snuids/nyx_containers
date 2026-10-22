@@ -77,7 +77,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.5.9"
+VERSION="1.6.0"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
@@ -999,10 +999,33 @@ if __name__ == '__main__':
     
 
     #>> AMQC
+    # amqstompclient.AMQClient reads both "earlyack" and "heartbeats" from the
+    # *server* dict (its first argument). They used to be passed in the module
+    # dict below, where they are silently ignored: earlyack stayed False and the
+    # heartbeats fell back to the library default (10s/20s).
+    # With earlyack=False the ACK is sent only after the callback returns. A long
+    # running notebook (github.ipynb walks 514 repos for ~5 minutes) therefore
+    # delays the ACK until ActiveMQ redelivers the message; the duplicated ACK
+    # raises "ProtocolException: Unexpected ACK received", which ends up in
+    # AMQClient.general_error() -> os._exit(1) and silently kills the runner.
     server={"ip":os.environ["AMQC_URL"],"port":os.environ["AMQC_PORT"]
-                    ,"login":os.environ["AMQC_LOGIN"],"password":os.environ["AMQC_PASSWORD"]}
+                    ,"login":os.environ["AMQC_LOGIN"],"password":os.environ["AMQC_PASSWORD"]
+                    ,"heartbeats":(120000,120000),"earlyack":True}
+
+    # Safety net: general_error() in amqstompclient ends with
+    # time.sleep(5); os._exit(1), so any STOMP protocol error kills the process.
+    # Reconnect instead of exiting so a broker hiccup cannot stop the runner.
+    def _safe_general_error(self):
+        logger.error("#=- General Error received. Reconnecting instead of exiting.")
+        try:
+            self.reconnect_and_listen()
+        except Exception:
+            logger.error("Unable to reconnect after general error.", exc_info=True)
+
+    amqstompclient.AMQClient.general_error = _safe_general_error
+
     conn=amqstompclient.AMQClient(server
-        , {"name":MODULE,"version":VERSION,"lifesign":"/topic/NYX_MODULE_INFO","heartbeats":(120000,120000),"earlyack":True},QUEUE,callback=messageReceived)
+        , {"name":MODULE,"version":VERSION,"lifesign":"/topic/NYX_MODULE_INFO"},QUEUE,callback=messageReceived)
     
     connectionparameters={"conn":conn}
 
