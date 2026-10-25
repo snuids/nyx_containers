@@ -116,3 +116,6 @@ sources/startreportrunner.sh
 sources/startreportscheduler.sh
 sources/startreportscheduler.sh
 sources/startreportrunner.sh
+.vscode/launch.json
+
+sources/logs/
