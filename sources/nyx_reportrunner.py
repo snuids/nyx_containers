@@ -38,6 +38,7 @@ VERSION HISTORY
 * 27 Apr 2026 1.9.20 **AMA** ARM compatible build
 * 18 May 2026 1.9.22 **AMA** Added jasper API call logs
 * 20 May 2026 1.9.23 **AMA** Changed handling of Jasper API response. Now checks the status code and logs the response content. If the call fails, it logs the error message from the response (if available) or a generic error message.   
+* 25 Oct 2026 1.9.24 **AMA** Send a WebSocket notification to the requesting user when a report finishes or fails.
 """
 
 import os
@@ -64,7 +65,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.23"
+VERSION="1.9.24"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
@@ -318,7 +319,64 @@ def messageReceivedReport(destination,message,headers):
     messagejson["treatment"]["error"]=errormessage
     logger.info(json.dumps(messagejson))
     conn.send_message("/queue/NYX_REPORT_STEP3",json.dumps(messagejson))
+    notifyReportFinished(messagejson)
     logger.info("<== "*10)
+
+
+def notifyReportFinished(messagejson):
+    """Notify the requesting user through the NYX WebSocket gateway."""
+    try:
+        creds = messagejson.get("creds") or {}
+        user = creds.get("user") or {}
+        login = user.get("user") or user.get("login") or user.get("id")
+        if not login or str(login).lower() == "reportscheduler":
+            return
+
+        report = messagejson.get("report") or {}
+        treatment = messagejson.get("treatment") or {}
+        status = treatment.get("status", "")
+        language = str(user.get("language") or "en")[:2]
+
+        titles = {
+            "en": ("Report ready", "Report failed"),
+            "fr": ("Rapport prêt", "Échec du rapport"),
+            "el": ("Η αναφορά είναι έτοιμη", "Η αναφορά απέτυχε"),
+        }
+        success_title, error_title = titles.get(language, titles["en"])
+
+        report_title = report.get("title") or messagejson.get("id", "")
+        if status == "Finished":
+            title = success_title
+            message = report_title
+            message_type = "success"
+        else:
+            title = error_title
+            error = (treatment.get("error") or "Unknown error")[:300]
+            message = ("%s: %s" % (report_title, error)).strip(": ")
+            message_type = "error"
+
+        notification = {
+            "login": login,
+            "data": {
+                "type": "message",
+                "data": {
+                    "notif_type": "global",
+                    "notif_title": title,
+                    "notif_message": message,
+                    "notif_message_type": message_type,
+                    "notif_code": "report_finished",
+                    "report_id": messagejson.get("id"),
+                    "report_title": report_title,
+                    "report_type": report.get("reportType"),
+                    "report_status": status,
+                    "downloads": messagejson.get("downloads") or [],
+                },
+            },
+        }
+        conn.send_message("/topic/TO_UI", json.dumps(notification))
+        logger.info("Report notification sent to " + str(login))
+    except Exception:
+        logger.error("Unable to send report notification", exc_info=True)
 
 if __name__ == '__main__':    
     MODULE="ReportRunner_"+os.environ["RUNNER"]
