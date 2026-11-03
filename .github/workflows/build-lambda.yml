@@ -27,7 +27,7 @@ jobs:
           # break the shell and fail the step with exit code 127.
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          VERSION=$(printf '%s\n' "$COMMIT_MSG" | grep -oP 'lambda:v\K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+          VERSION=$(printf '%s\n' "$COMMIT_MSG" | grep -oP 'lambda:v\K[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
           if [ -z "$VERSION" ]; then
             echo "ERROR: No version found in commit message. Expected format: lambda:v1.0.0"
             exit 1

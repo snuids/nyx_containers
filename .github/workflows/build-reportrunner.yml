@@ -21,9 +21,13 @@ jobs:
 
       - name: Extract version from commit message
         id: extract_version
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          VERSION=$(echo "$COMMIT_MSG" | grep -oP 'reportrunner:v\K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+          # A merge commit repeats the pull request title in its body, so the version can appear
+          # more than once; keep the first match or the output file receives a second, bare line
+          # and the step fails with "Invalid format".
+          VERSION=$(printf '%s\n' "$COMMIT_MSG" | grep -oP 'reportrunner:v\K[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
           if [ -z "$VERSION" ]; then
             echo "ERROR: No version found in commit message. Expected format: reportrunner:v1.0.0"
             exit 1
