@@ -38,6 +38,7 @@ VERSION HISTORY
 * 27 Apr 2026 1.9.20 **AMA** ARM compatible build
 * 18 May 2026 1.9.22 **AMA** Added jasper API call logs
 * 20 May 2026 1.9.23 **AMA** Changed handling of Jasper API response. Now checks the status code and logs the response content. If the call fails, it logs the error message from the response (if available) or a generic error message.   
+* 03 Nov 2026 1.9.25 **AMA** Dependency refresh from the Dependabot triage: Pillow 11.1.0 to 13.0.0, lxml 5.3.1 to 6.1.3, urllib3 2.3.0 to 2.8.0, requests 2.32.3 to 2.34.2, certifi 2025.1.31 to 2026.10.23, idna 3.10 to 3.20, fonttools 4.56.0 to 4.68.0.
 * 25 Oct 2026 1.9.24 **AMA** Send a WebSocket notification to the requesting user when a report finishes or fails.
 """
 
@@ -65,7 +66,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.24"
+VERSION="1.9.25"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 

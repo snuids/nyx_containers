@@ -44,6 +44,7 @@ there is a syntax error in the lambda.
 * 22 Jun 2020 1.5.3  **AMA** Fix a bug that could prevent the cron jobs from being executed after an Elastic Search failure
 * 05 Jun 2025 1.5.8  **AMA** Becomes swarm compatible
 * 26 Apr 2026 1.5.9  **AMA** Becomes swarm compatible
+* 03 Nov 2026 1.6.1  **AMA** Same dependency refresh as reportrunner v1.9.25: Pillow 11.1.0 to 13.0.0, lxml 5.3.1 to 6.1.3, urllib3 2.3.0 to 2.8.0, requests 2.32.3 to 2.34.2, certifi 2025.1.31 to 2026.10.23.
 """
 import os
 import re
@@ -77,7 +78,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.6.0"
+VERSION="1.6.1"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
