@@ -39,6 +39,7 @@ VERSION HISTORY
 * 18 May 2026 1.9.22 **AMA** Added jasper API call logs
 * 20 May 2026 1.9.23 **AMA** Changed handling of Jasper API response. Now checks the status code and logs the response content. If the call fails, it logs the error message from the response (if available) or a generic error message.   
 * 03 Nov 2026 1.9.25 **AMA** Dependency refresh from the Dependabot triage: Pillow 11.1.0 to 13.0.0, lxml 5.3.1 to 6.1.3, urllib3 2.3.0 to 2.8.0, requests 2.32.3 to 2.34.2, certifi 2025.1.31 to 2026.10.23, idna 3.10 to 3.20, fonttools 4.56.0 to 4.68.0.
+* 03 Nov 2026 1.9.26 **AMA** The startup log no longer prints the AMQP credentials; the password is masked. The same fix is applied to the other workers that logged the connection parameters.
 * 25 Oct 2026 1.9.24 **AMA** Send a WebSocket notification to the requesting user when a report finishes or fails.
 """
 
@@ -66,7 +67,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.25"
+VERSION="1.9.26"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
@@ -412,7 +413,9 @@ if __name__ == '__main__':
     server={"ip":os.environ["AMQC_URL"],"port":os.environ["AMQC_PORT"]
                     ,"login":os.environ["AMQC_LOGIN"],"password":os.environ["AMQC_PASSWORD"]
                     ,"heartbeats":(120000,120000),"earlyack":True}
-    logger.info(server)                
+    # The broker password must never reach the logs: `docker logs` is readable by anyone who can
+    # reach the docker socket on the host, and this line used to print the AMQP credentials in clear.
+    logger.info({key: ('***' if key == 'password' else value) for key, value in server.items()})
     conn=amqstompclient.AMQClient(server
         , {"name":MODULE,"version":VERSION,"lifesign":"/topic/NYX_MODULE_INFO"},QUEUE,callback=messageReceived)
     #conn,listener= amqHelper.init_amq_connection(activemq_address, activemq_port, activemq_user,activemq_password, "RestAPI",VERSION,messageReceived)

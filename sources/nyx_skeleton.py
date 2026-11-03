@@ -52,7 +52,9 @@ logger.info("==============================")
 #>> AMQC
 server={"ip":os.environ["AMQC_URL"],"port":os.environ["AMQC_PORT"]
                 ,"login":os.environ["AMQC_LOGIN"],"password":os.environ["AMQC_PASSWORD"]}
-logger.info(server)                
+# The broker password must never reach the logs: `docker logs` is readable by anyone who can
+# reach the docker socket on the host, and this line used to print the AMQP credentials in clear.
+logger.info({key: ('***' if key == 'password' else value) for key, value in server.items()})
 conn=amqstompclient.AMQClient(server
     , {"name":MODULE,"version":VERSION,"lifesign":"/topic/NYX_MODULE_INFO"},QUEUE,callback=messageReceived)
 #conn,listener= amqHelper.init_amq_connection(activemq_address, activemq_port, activemq_user,activemq_password, "RestAPI",VERSION,messageReceived)
