@@ -108,7 +108,8 @@ except:
 
 logs=[]
 print("==== Args")
-print(report)
+# Never the whole message: it carries the session token and the user document.
+print({key: value for key, value in report.items() if key != "creds"})
 print("==== Args")
 print(report["report"]["parameters"])
 

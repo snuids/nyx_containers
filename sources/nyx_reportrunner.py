@@ -40,6 +40,7 @@ VERSION HISTORY
 * 20 May 2026 1.9.23 **AMA** Changed handling of Jasper API response. Now checks the status code and logs the response content. If the call fails, it logs the error message from the response (if available) or a generic error message.   
 * 03 Nov 2026 1.9.25 **AMA** Dependency refresh from the Dependabot triage: Pillow 11.1.0 to 13.0.0, lxml 5.3.1 to 6.1.3, urllib3 2.3.0 to 2.8.0, requests 2.32.3 to 2.34.2, certifi 2025.1.31 to 2026.10.23, idna 3.10 to 3.20, fonttools 4.56.0 to 4.68.0.
 * 03 Nov 2026 1.9.26 **AMA** The startup log no longer prints the AMQP credentials; the password is masked. The same fix is applied to the other workers that logged the connection parameters.
+* 03 Nov 2026 1.9.27 **AMA** The job message is logged without the session token and the user phone number; the report builder no longer prints the message it receives.
 * 25 Oct 2026 1.9.24 **AMA** Send a WebSocket notification to the requesting user when a report finishes or fails.
 """
 
@@ -67,11 +68,35 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.26"
+VERSION="1.9.27"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
 ################################################################################
+SENSITIVE_USER_FIELDS = ("password", "phone")
+
+
+def redact_message(message):
+    """Return a copy of a job message that is safe to log.
+
+    The message carries the session token and the user document, so logging it verbatim wrote a
+    live credential (and a phone number) into the worker log on every report.
+    """
+    try:
+        safe = json.loads(json.dumps(message, default=str))
+    except Exception:
+        return "<message not serialisable>"
+    creds = safe.get("creds")
+    if isinstance(creds, dict):
+        if "token" in creds:
+            creds["token"] = "***"
+        user = creds.get("user")
+        if isinstance(user, dict):
+            for field in SENSITIVE_USER_FIELDS:
+                if field in user:
+                    user[field] = "***"
+    return safe
+
 def messageReceived(destination,message,headers):
     if "STEP2" in destination:
         messageReceivedReport(destination,message,headers)
@@ -129,13 +154,12 @@ def messageReceivedReport(destination,message,headers):
     global es
     logger.info("==> "*10)
     logger.info("Message Received %s" % destination)
-    logger.info(message)
     status="Finished"
     errormessage=""
     messagejson=json.loads(message)
     logger.info("#==> "*50)
     #messagejson=json.loads(messagejson)
-    logger.info(messagejson)
+    logger.info(redact_message(messagejson))
     logger.info("#==> "*50)
     logger.info(messagejson["treatment"])
     logger.info("==> "*50)
@@ -148,7 +172,7 @@ def messageReceivedReport(destination,message,headers):
     messagejson["output"]=cwd+"/generated/"+messagejson["id"]
 
     logger.info("===-"*10)
-    logger.info(messagejson)
+    logger.info(redact_message(messagejson))
     
     reporttype=messagejson["report"].get("reportType","python")
 
