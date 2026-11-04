@@ -41,6 +41,7 @@ VERSION HISTORY
 * 03 Nov 2026 1.9.25 **AMA** Dependency refresh from the Dependabot triage: Pillow 11.1.0 to 13.0.0, lxml 5.3.1 to 6.1.3, urllib3 2.3.0 to 2.8.0, requests 2.32.3 to 2.34.2, certifi 2025.1.31 to 2026.10.23, idna 3.10 to 3.20, fonttools 4.56.0 to 4.68.0.
 * 03 Nov 2026 1.9.26 **AMA** The startup log no longer prints the AMQP credentials; the password is masked. The same fix is applied to the other workers that logged the connection parameters.
 * 03 Nov 2026 1.9.27 **AMA** The job message is logged without the session token and the user phone number; the report builder no longer prints the message it receives.
+* 04 Nov 2026 1.9.28 **AMA** The remaining paths that logged a job message raw (add-report and the STEP3 dispatch) are redacted too.
 * 25 Oct 2026 1.9.24 **AMA** Send a WebSocket notification to the requesting user when a report finishes or fails.
 """
 
@@ -68,7 +69,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.27"
+VERSION="1.9.28"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
@@ -106,7 +107,7 @@ def messageReceived(destination,message,headers):
 def messageReceivedAddReport(destination,message,headers):
     logger.info("==> "*10)
     logger.info("Message Received %s" % destination)
-    logger.info(message)
+    logger.info(redact_message(json.loads(message)))
     
     
     messagejson=json.loads(message)
@@ -343,7 +344,7 @@ def messageReceivedReport(destination,message,headers):
     messagejson["treatment"]["duration"]=(datetime.now()-starttime).total_seconds()
     messagejson["treatment"]["status"]=status
     messagejson["treatment"]["error"]=errormessage
-    logger.info(json.dumps(messagejson))
+    logger.info(json.dumps(redact_message(messagejson)))
     conn.send_message("/queue/NYX_REPORT_STEP3",json.dumps(messagejson))
     notifyReportFinished(messagejson)
     logger.info("<== "*10)
