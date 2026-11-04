@@ -45,6 +45,7 @@ there is a syntax error in the lambda.
 * 05 Jun 2025 1.5.8  **AMA** Becomes swarm compatible
 * 26 Apr 2026 1.5.9  **AMA** Becomes swarm compatible
 * 03 Nov 2026 1.6.1  **AMA** Same dependency refresh as reportrunner v1.9.25: Pillow 11.1.0 to 13.0.0, lxml 5.3.1 to 6.1.3, urllib3 2.3.0 to 2.8.0, requests 2.32.3 to 2.34.2, certifi 2025.1.31 to 2026.10.23.
+* 04 Nov 2026 1.6.2  **AMA** The command message is logged redacted: no session token, no user phone number.
 """
 import os
 import re
@@ -78,7 +79,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.6.1"
+VERSION="1.6.2"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
@@ -260,8 +261,36 @@ def createNotebook(nbname,functionname,nbtype,nbparameter):
 
 ################################################################################
 
+SENSITIVE_USER_FIELDS = ("password", "phone")
+
+
+def redact_message(message):
+    """Return a copy of a job message that is safe to log.
+
+    The message carries a session token and the user document, so logging it verbatim writes a live
+    credential (and a phone number) into the worker log.
+    """
+    try:
+        safe = json.loads(json.dumps(message, default=str))
+    except Exception:
+        return "<message not serialisable>"
+    creds = safe.get("creds")
+    if isinstance(creds, dict):
+        if "token" in creds:
+            creds["token"] = "***"
+        user = creds.get("user")
+        if isinstance(user, dict):
+            for field in SENSITIVE_USER_FIELDS:
+                if field in user:
+                    user[field] = "***"
+    return safe
+
+
 def handleCommand(message,global_headers):
-    logger.info("Handling message:"+message)
+    try:
+        logger.info("Handling message: %s" % json.dumps(redact_message(json.loads(message))))
+    except ValueError:
+        logger.info("Handling message: <not valid json>")
     mobj=json.loads(message)
 
     if str(mobj["runner"])!=str(os.environ["RUNNER"]):
