@@ -15,6 +15,7 @@ VERSION HISTORY
 * 29 Jan 2021 1.0.4 **AMA** Fix issue with date parameters* 
 * 03 Jan 2026 1.0.7 **AMA** Fix a report parameter issue
 * 04 Nov 2026 1.0.8 **AMA** The task message is logged redacted, on receive and before the dispatch to STEP1.
+* 04 Nov 2026 1.0.9 **AMA** Redaction is recursive and by key name: the nyx_reportdef document logged on each task no longer prints its jdbc_password.
  
 """
 import re
@@ -38,7 +39,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 from dateutil import parser
 
-VERSION="1.0.8"
+VERSION="1.0.9"
 MODULE="ReportScheduler"
 QUEUE=[]
 
@@ -105,7 +106,7 @@ def execute_report(duetime,task):
     if "parameters" in task:
         report["_source"]["parameters"] = task["parameters"]
 #    report["_source"]["parameters"] = task["_source"]["parameters"]
-    logger.info(report)
+    logger.info(redact_message(report))
     for parameter in report["_source"]["parameters"]:
         logger.info(parameter)
 
@@ -238,29 +239,9 @@ def checkTasks():
     logger.info("Finished..........")
 
 ################################################################################
-SENSITIVE_USER_FIELDS = ("password", "phone")
-
-
-def redact_message(message):
-    """Return a copy of a job message that is safe to log.
-
-    The message carries a session token and the user document, so logging it verbatim writes a live
-    credential (and a phone number) into the worker log.
-    """
-    try:
-        safe = json.loads(json.dumps(message, default=str))
-    except Exception:
-        return "<message not serialisable>"
-    creds = safe.get("creds")
-    if isinstance(creds, dict):
-        if "token" in creds:
-            creds["token"] = "***"
-        user = creds.get("user")
-        if isinstance(user, dict):
-            for field in SENSITIVE_USER_FIELDS:
-                if field in user:
-                    user[field] = "***"
-    return safe
+# Redaction lives in lib/redact.py so the runner, the lambda, the scheduler and the report
+# builder all mask the same fields the same way.
+from lib.redact import redact_message
 
 
 def messageReceived(destination,message,headers):

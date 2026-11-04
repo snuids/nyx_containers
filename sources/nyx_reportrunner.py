@@ -42,6 +42,7 @@ VERSION HISTORY
 * 03 Nov 2026 1.9.26 **AMA** The startup log no longer prints the AMQP credentials; the password is masked. The same fix is applied to the other workers that logged the connection parameters.
 * 03 Nov 2026 1.9.27 **AMA** The job message is logged without the session token and the user phone number; the report builder no longer prints the message it receives.
 * 04 Nov 2026 1.9.28 **AMA** The remaining paths that logged a job message raw (add-report and the STEP3 dispatch) are redacted too.
+* 04 Nov 2026 1.9.29 **AMA** Redaction is recursive and by key name, so a report definition's jdbc_password is masked too, wherever it sits.
 * 25 Oct 2026 1.9.24 **AMA** Send a WebSocket notification to the requesting user when a report finishes or fails.
 """
 
@@ -69,34 +70,14 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.28"
+VERSION="1.9.29"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
 ################################################################################
-SENSITIVE_USER_FIELDS = ("password", "phone")
-
-
-def redact_message(message):
-    """Return a copy of a job message that is safe to log.
-
-    The message carries the session token and the user document, so logging it verbatim wrote a
-    live credential (and a phone number) into the worker log on every report.
-    """
-    try:
-        safe = json.loads(json.dumps(message, default=str))
-    except Exception:
-        return "<message not serialisable>"
-    creds = safe.get("creds")
-    if isinstance(creds, dict):
-        if "token" in creds:
-            creds["token"] = "***"
-        user = creds.get("user")
-        if isinstance(user, dict):
-            for field in SENSITIVE_USER_FIELDS:
-                if field in user:
-                    user[field] = "***"
-    return safe
+# Redaction lives in lib/redact.py so the runner, the lambda, the scheduler and the report
+# builder all mask the same fields the same way.
+from lib.redact import redact_message
 
 def messageReceived(destination,message,headers):
     if "STEP2" in destination:

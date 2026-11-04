@@ -24,6 +24,9 @@ from dateutil.parser import parse
 from elastic_helper import es_helper
 #from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
+# The same redaction the runners use: the message holds the token, the user document and the
+# report definition, whose jdbc_password is a credential too.
+from lib.redact import redact_message
 
 logging.basicConfig()
 logger = logging.getLogger()
@@ -108,8 +111,9 @@ except:
 
 logs=[]
 print("==== Args")
-# Never the whole message: it carries the session token and the user document.
-print({key: value for key, value in report.items() if key != "creds"})
+# Never the raw message: it carries the session token, the user document and the report
+# definition, whose jdbc_password is a credential too.
+print(redact_message(report))
 print("==== Args")
 print(report["report"]["parameters"])
 
