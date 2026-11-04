@@ -1,0 +1,29 @@
+FROM python:3.11.3-alpine
+LABEL maintainer="snuids,lapin,lamenuiserie"
+
+# The scheduler image used to be built from Dockerfile7 with its CMD swapped by hand, so v1.0.7 was
+# not reproducible from the repository. This file is that build, fixed: same bases, same
+# requirements7.txt, the scheduler as the default command.
+RUN apk add --no-cache tk
+
+RUN apk add --no-cache --virtual .build-deps \
+    build-base \
+    gcc \
+    g++ \
+    musl-dev \
+    linux-headers \
+    freetype-dev \
+    libpng-dev
+
+COPY ./sources/requirements7.txt /opt/sources/requirements.txt
+RUN pip install -r /opt/sources/requirements.txt
+
+# Remove build dependencies to reduce image size
+RUN apk del .build-deps
+
+COPY ./sources /opt/sources
+RUN rm -rf /opt/sources/logs && mkdir -p /opt/sources/logs
+RUN rm -f /opt/sources/*.sh
+
+WORKDIR /opt/sources
+CMD ["python", "nyx_reportscheduler.py"]
