@@ -32,7 +32,7 @@ python-docx==1.1.2
 python-logstash-async==4.0.1
 pytz==2025.1
 redis==5.2.1
-requests==2.34.2
+requests==2.33.0
 six==1.17.0
 stomp.py==8.2.0
 tk==0.1.0
