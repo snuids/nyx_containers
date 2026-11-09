@@ -90,76 +90,9 @@ def replaceText(replacementHT,text):
             pass
     return text
 
-#######################################################################################
-# Start
-#######################################################################################
-
-print("Starting v0.2")
-print(datetime.now(timezone.utc).isoformat())
-localmode=False
-try:
-    os.environ["LOCAL_MODE"]
-    localmode=True
-except:
-    pass
-
-try:
-    report=json.loads(sys.argv[1])
-except:
-    report={"id": "id_19485666_27963523", "creds": {"token": "933921e1-58ae-4948-a941-037e9ce2e915", "user": {"filters": [], "firstname": "Arnaud", "id": "amarchand@icloud.com", "language": "en", "lastname": "Marchand", "login": "amarchand", "password": "", "phone": "0033497441962", "privileges": ["admin"], "user": "amarchand@icloud.com"}}, "report": {"description": "My First Report", "exec": "report1", "generatePDF": True, "icon": "file", "output": ["txt", "pdf"], "parameters": [{"name": "param1", "title": "Param1", "type": "text", "value": "test"}, {"name": "param2", "title": "Param2", "type": "interval", "value": ["2019-11-20T23:00:00.000Z", "2019-11-21T23:00:00.000Z"]}], "privileges": [], "reportType": "python", "title": "My First Report"}, "privileges": ["admin"], "treatment": {"status": "Waiting", "creation": "2019-11-22T08:24:03.288Z", "start": "2019-11-22T09:24:03.293651"}, "@timestamp": "2019-11-22T08:24:03.288Z", "output": "/opt/sources/generated/id_19485666_27963523"}
-
-
-logs=[]
-print("==== Args")
-# Never the raw message: it carries the session token, the user document and the report
-# definition, whose jdbc_password is a credential too.
-print(redact_message(report))
-print("==== Args")
-print(report["report"]["parameters"])
-
-params={}
-
-containertimezone=tzlocal.get_localzone()
-
-for param in report["report"]["parameters"]:
-    if param["type"]=="interval":
-        params[param["name"]+"_start"]=parse(param["value"][0]).astimezone(containertimezone)
-        params[param["name"]+"_end"]=parse(param["value"][1]).astimezone(containertimezone)
-    elif param["type"]=="date":
-        params[param["name"]]=parse(param["value"]).astimezone(containertimezone)
-    else:
-        params[param["name"]]=param["value"]
-
-prepath = "./reports/notebooks/"
-
-# ELASTIC SEARCH
-
-if not localmode:
-    host_params="http://elasticsearch:9200"
-    es = ES(hosts=[host_params])
-    print(es.info())
-else:        
-    print("Connect to elastic via password")
-    host_params = {'host':os.environ["ELK_URL"], 'port':int(os.environ["ELK_PORT"]), 'use_ssl':True}
-    
-    es = ES([host_params], connection_class=RC, http_auth=(os.environ["ELK_LOGIN"], os.environ["ELK_PASSWORD"]),  use_ssl=True ,verify_certs=False)
-    print(es.info())
-
-ipynbpath=prepath+report["report"]["notebook"]+".ipynb"
-
-
-# PYTHON
-if os.path.isfile(ipynbpath) :
-    print("IPYNB (%s) found." %(ipynbpath))
-else:
-    print("ERROR IPYNB (%s) found." %(ipynbpath))
-    sys.exit(1) 
-
-
-
-replacementHT={}
-replacementHT.update(params)
-
+################################################################################
+# Logging helpers of the notebook cells: they write to the report log the builder saves on the
+# report document, so a cell can log without reaching the logger itself.
 ################################################################################
 def logger_info(log,exc_info=False):
     logger.info(log,exc_info=exc_info)
@@ -180,46 +113,140 @@ def logger_warn(log,exc_info=False):
 def logger_fatal(log,exc_info=False):
     logger.fatal(log,exc_info=exc_info)
     logs.append("%s\tINFO\t%s" %(datetime.now().strftime("%d%b%Y %H:%M:%S.%f"),log))
+
 def computeNewCode(newcode):
+    """A cell calls `logger.info(...)`: the builder exposes `logger_info`, and the exec namespace
+    has no `logger`, so every call is rewritten before the cell is executed."""
     return newcode.replace("logger.","logger_")
 
-reportfunctions={}
 
-with open(ipynbpath, 'r') as content_file:
-    content = content_file.read()
-    jsoncontent=json.loads(content)
-    for cell in jsoncontent["cells"]:
-        if cell["cell_type"]=="code":
-            if len(cell["source"])>0 and "#@ONLOAD" in cell["source"][0]:
-                newcode="".join(cell["source"])
-                try:
-                    exec(computeNewCode(newcode))
-                except:
-                    logger_error("Common part crashed.",exc_info=True)
-                    tb = traceback.format_exc()
-                    for trace in ["TRACE:"+_ for _ in tb.split("\n")]:
-                        logger_info(trace)
 
-                        if "<string>"  in trace and "<module>" in trace:
-                           try:
-                                linenbr=int(trace.split("line ")[1].split(",")[0])
-                                linecodes=newcode.split("\n")
-                                for i in range(linenbr-5,linenbr+4):
-                                    if i>=0 and i<len(linecodes):
-                                        if i==linenbr-1:
-                                          logger_error(">>> CODE:"+linecodes[i])
-                                        else:
-                                          logger_info(">>> CODE:"+linecodes[i])
+#######################################################################################
+# Start
+#######################################################################################
 
-                           except e:
-                                logger_error("ERROR while decoding error",exc_info=True)
+def main(argv=None, client=None):
+    """Generate a python report: run the notebook cells tagged on the document.
 
-                    save_log()
-                    raise Exception("ERROR COMMON")
-            if len(cell["source"])>0 and "#@PARAGRAPH=" in cell["source"][0]:
-                newcode="".join(cell["source"])
-                reportfunctions["${"+cell["source"][0].replace("#@PARAGRAPH=","").strip()+"}"]=computeNewCode(newcode)
+    `argv[1]` is the job message the runner passes on the command line. `client` lets a
+    test hand in a cluster double: the script otherwise connects to `elasticsearch:9200`
+    (or to `ELK_URL` when `LOCAL_MODE` is set), which is what made it untestable — the
+    whole generation used to run at import.
+    """
+    global es, report, logs
+    argv = sys.argv if argv is None else argv
+
+    print("Starting v0.2")
+    print(datetime.now(timezone.utc).isoformat())
+    localmode=False
+    try:
+        os.environ["LOCAL_MODE"]
+        localmode=True
+    except:
+        pass
+
+    try:
+        report=json.loads(argv[1])
+    except:
+        report={"id": "id_19485666_27963523", "creds": {"token": "933921e1-58ae-4948-a941-037e9ce2e915", "user": {"filters": [], "firstname": "Arnaud", "id": "amarchand@icloud.com", "language": "en", "lastname": "Marchand", "login": "amarchand", "password": "", "phone": "0033497441962", "privileges": ["admin"], "user": "amarchand@icloud.com"}}, "report": {"description": "My First Report", "exec": "report1", "generatePDF": True, "icon": "file", "output": ["txt", "pdf"], "parameters": [{"name": "param1", "title": "Param1", "type": "text", "value": "test"}, {"name": "param2", "title": "Param2", "type": "interval", "value": ["2019-11-20T23:00:00.000Z", "2019-11-21T23:00:00.000Z"]}], "privileges": [], "reportType": "python", "title": "My First Report"}, "privileges": ["admin"], "treatment": {"status": "Waiting", "creation": "2019-11-22T08:24:03.288Z", "start": "2019-11-22T09:24:03.293651"}, "@timestamp": "2019-11-22T08:24:03.288Z", "output": "/opt/sources/generated/id_19485666_27963523"}
+
+
+    logs=[]
+    print("==== Args")
+    # Never the raw message: it carries the session token, the user document and the report
+    # definition, whose jdbc_password is a credential too.
+    print(redact_message(report))
+    print("==== Args")
+    print(report["report"]["parameters"])
+
+    params={}
+
+    containertimezone=tzlocal.get_localzone()
+
+    for param in report["report"]["parameters"]:
+        if param["type"]=="interval":
+            params[param["name"]+"_start"]=parse(param["value"][0]).astimezone(containertimezone)
+            params[param["name"]+"_end"]=parse(param["value"][1]).astimezone(containertimezone)
+        elif param["type"]=="date":
+            params[param["name"]]=parse(param["value"]).astimezone(containertimezone)
+        else:
+            params[param["name"]]=param["value"]
+
+    prepath = "./reports/notebooks/"
+
+    # ELASTIC SEARCH
+
+    if not localmode:
+        host_params="http://elasticsearch:9200"
+        es = client if client is not None else ES(hosts=[host_params])
+        print(es.info())
+    else:        
+        print("Connect to elastic via password")
+        host_params = {'host':os.environ["ELK_URL"], 'port':int(os.environ["ELK_PORT"]), 'use_ssl':True}
+    
+        es = client if client is not None else ES(
+            [host_params], connection_class=RC,
+            http_auth=(os.environ["ELK_LOGIN"], os.environ["ELK_PASSWORD"]),
+            use_ssl=True, verify_certs=False)
+        print(es.info())
+
+    ipynbpath=prepath+report["report"]["notebook"]+".ipynb"
+
+
+    # PYTHON
+    if os.path.isfile(ipynbpath) :
+        print("IPYNB (%s) found." %(ipynbpath))
+    else:
+        print("ERROR IPYNB (%s) found." %(ipynbpath))
+        sys.exit(1) 
+
+
+
+    replacementHT={}
+    replacementHT.update(params)
+
+    reportfunctions={}
+
+    with open(ipynbpath, 'r') as content_file:
+        content = content_file.read()
+        jsoncontent=json.loads(content)
+        for cell in jsoncontent["cells"]:
+            if cell["cell_type"]=="code":
+                if len(cell["source"])>0 and "#@ONLOAD" in cell["source"][0]:
+                    newcode="".join(cell["source"])
+                    try:
+                        exec(computeNewCode(newcode))
+                    except:
+                        logger_error("Common part crashed.",exc_info=True)
+                        tb = traceback.format_exc()
+                        for trace in ["TRACE:"+_ for _ in tb.split("\n")]:
+                            logger_info(trace)
+
+                            if "<string>"  in trace and "<module>" in trace:
+                               try:
+                                    linenbr=int(trace.split("line ")[1].split(",")[0])
+                                    linecodes=newcode.split("\n")
+                                    for i in range(linenbr-5,linenbr+4):
+                                        if i>=0 and i<len(linecodes):
+                                            if i==linenbr-1:
+                                              logger_error(">>> CODE:"+linecodes[i])
+                                            else:
+                                              logger_info(">>> CODE:"+linecodes[i])
+
+                               except e:
+                                    logger_error("ERROR while decoding error",exc_info=True)
+
+                        save_log()
+                        raise Exception("ERROR COMMON")
+                if len(cell["source"])>0 and "#@PARAGRAPH=" in cell["source"][0]:
+                    newcode="".join(cell["source"])
+                    reportfunctions["${"+cell["source"][0].replace("#@PARAGRAPH=","").strip()+"}"]=computeNewCode(newcode)
             
 
 
-save_log()
+    save_log()
+
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

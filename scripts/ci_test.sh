@@ -14,11 +14,13 @@
 # `checkTasks` loop was held (`nyx_reportscheduler.py` 52 % -> 70 %), the two helpers no script
 # imported were deleted (147 statements) and the example skeleton left the measure; then 41 %
 # once the runner's job itself was held (`nyx_reportrunner.py` 21 % -> 74 %: the four report
-# types, the PDF conversion, the download list and the always-sent step 3). Raise it as tests
-# land, never lower it.
+# types, the PDF conversion, the download list and the always-sent step 3); then 75 % once the two
+# report builders were made importable and tested (0 % -> 89 % and 81 %) and the lambda runtime
+# held (`nyx_lambda.py` 22 % -> 72 %: loadConfig, dispatch, logs, stats, requirements). Raise it
+# as tests land, never lower it.
 set -eu
 
-FLOOR=41
+FLOOR=75
 
 python -m pip install --quiet -r tests/requirements-test.txt
 python -m coverage erase
