@@ -67,17 +67,21 @@ branches of `nyx_xlsimporter`, `nyx_monitordocker` and `nyx_formatconverter`.
 
 # BUILDING
 
-All the containers can be build using the following command:
+The images that run in production are built from `Dockerfiles/`, one file per container:
 
 ```
-docker build .
+docker build . -f Dockerfiles/Dockerfilelambda          -t snuids/nyx_lambda:vX.Y.Z
+docker build . -f Dockerfiles/Dockerfilereportrunner    -t snuids/nyx-reportrunner:vX.Y.Z
+docker build . -f Dockerfiles/Dockerfilereportscheduler -t snuids/nyx_reportscheduler:vX.Y.Z
+docker build . -f Dockerfiles/Dockerfilejupylab         -t snuids/nyx_jupylab:vX.Y.Z
 ```
 
-The report runner container must be built using the following command:
+`Dockerfile7` is the same base image without a default command, for a container of your own.
 
-```
-docker build . -f Dockerfileoo
-```
+The 2019 images are gone — `Dockerfile`, `Dockerfile_lambda`, `Dockerfileoo2*` and the
+`sources/requirements.txt` they installed (Python 3.7/3.9 bases, Flask 1.0, numpy 1.15): nothing
+has built them since the dispatch moved to `Dockerfiles/`, and they carried 65 of the 68 open
+Dependabot alerts. The documentation build has its own short list now, `docs/requirements.txt`.
 
 # Run
 
