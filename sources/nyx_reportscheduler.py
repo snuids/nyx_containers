@@ -16,6 +16,9 @@ VERSION HISTORY
 * 03 Jan 2026 1.0.7 **AMA** Fix a report parameter issue
 * 04 Nov 2026 1.0.8 **AMA** The task message is logged redacted, on receive and before the dispatch to STEP1.
 * 04 Nov 2026 1.0.9 **AMA** Redaction is recursive and by key name: the nyx_reportdef document logged on each task no longer prints its jdbc_password.
+* 09 Nov 2026 1.0.10 **AMA** A late task is rescheduled from now, not from its stored next run: after a
+                              stop longer than the period it used to stay due and fire on every tick,
+                              generating and mailing a report every ten seconds until it caught up.
  
 """
 import re
@@ -39,7 +42,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 from dateutil import parser
 
-VERSION="1.0.9"
+VERSION="1.0.10"
 MODULE="ReportScheduler"
 QUEUE=[]
 
@@ -212,9 +215,16 @@ def checkTasks():
         if("nextRun" in taskin):
             try:
                 nextrun=parser.parse(taskin["nextRun"]).astimezone(containertimezone)#.replace(tzinfo=None) #.replace(tzinfo=pytz.timezone(tzlocal.get_localzone().zone))
-                cron,nextrun2=computeCronOfTask(taskin,nextrun+timedelta(hours=1))
+                now=datetime.now().astimezone(containertimezone)
 
-                if(nextrun<datetime.now().astimezone(containertimezone)):
+                if(nextrun<now):
+                    # The next run is computed from `now` when the task is late, never from the
+                    # stored date alone: from a date already in the past, the next occurrence is
+                    # in the past too, so the task stayed due and fired again on the very next
+                    # tick — one report generated and mailed every ten seconds until it caught up,
+                    # after any stop longer than the period (a deploy, a crash).
+                    cron,nextrun2=computeCronOfTask(taskin,max(nextrun+timedelta(hours=1),now))
+
                     logger.info(">>>>>>>>>>>>>>> NEXT RUN %s" %(nextrun))
                     logger.info("NEXT RUN2 %s" %(nextrun2))
                     logger.info("CRON %s" %(cron))

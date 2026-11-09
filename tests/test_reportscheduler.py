@@ -234,24 +234,47 @@ class CheckTasksTests(unittest.TestCase):
         self.assertNotEqual(body["nextRun"], "2020-01-01T06:00:00+00:00")
         self.assertEqual(len(broker.sent_to("/queue/NYX_REPORT_STEP1")), 1)
 
-    def test_a_task_late_by_more_than_one_period_is_dispatched_again(self):
-        """Known defect: the next run is computed from the *stored* one, not from `now`.
+    def test_a_late_task_is_rescheduled_in_the_future(self):
+        """Regression: the next run is computed from `now` once the task is late.
 
-        `checkTasks` passes `nextrun + 1h` to `computeCronOfTask`, where `nextrun` is the date
-        read from the task — so a task late by more than one period is rescheduled one occurrence
-        at a time and stays due. After a stop longer than the period (a deploy, a crash), it fires
-        again on the next tick: one report generated and mailed per tick until it catches up.
-        Pinned here so the day it is fixed, the change is deliberate.
+        Computed from the stored date, a task late by more than one period was rescheduled one
+        occurrence at a time and stayed due — after a stop longer than the period (a deploy, a
+        crash) it generated and mailed a report every ten seconds until it caught up.
         """
         late = (datetime.datetime.now() - datetime.timedelta(days=3)).replace(
             hour=6, minute=0, second=0, microsecond=0).isoformat()
 
-        es, broker = self.run_tasks([self.task(next_run=late)])
+        es, _ = self.run_tasks([self.task(next_run=late)])
 
         rescheduled = datetime.datetime.fromisoformat(es.writes[0][2]["nextRun"])
-        self.assertLess(rescheduled, datetime.datetime.now().astimezone(rescheduled.tzinfo),
-                        "still in the past: the next tick will fire again")
-        self.assertEqual(len(broker.sent_to("/queue/NYX_REPORT_STEP1")), 1)
+        self.assertGreater(rescheduled, datetime.datetime.now().astimezone(rescheduled.tzinfo),
+                           "the task must be due again at its next occurrence, not immediately")
+
+    def test_a_late_task_fires_once_not_once_per_tick(self):
+        late = (datetime.datetime.now() - datetime.timedelta(days=3)).replace(
+            hour=6, minute=0, second=0, microsecond=0).isoformat()
+        es, broker = self.run_tasks([self.task(next_run=late)])
+
+        # What the next tick sees: the date that was just written back.
+        es.search_result = {"hits": {"hits": [
+            self.task(next_run=es.writes[0][2]["nextRun"])]}}
+        scheduler.checkTasks()
+
+        self.assertEqual(len(broker.sent_to("/queue/NYX_REPORT_STEP1")), 1,
+                         "one catch-up run, not one per tick")
+
+    def test_the_catch_up_run_covers_the_period_that_was_missed(self):
+        # The job is dispatched now, but its parameters are resolved against the due date it
+        # missed: the report covers the period it should have covered.
+        due = (datetime.datetime.now() - datetime.timedelta(days=3)).replace(
+            hour=6, minute=0, second=0, microsecond=0)
+        es, broker = self.run_tasks(
+            [self.task(next_run=due.isoformat())],
+            documents={"monthly": {"title": "Monthly", "parameters": [
+                {"name": "period", "type": "interval", "value": "now-1d:now"}]}})
+
+        message = json.loads(broker.sent_to("/queue/NYX_REPORT_STEP1")[0])
+        self.assertEqual(message["report"]["parameters"][0]["value"][1], due.isoformat())
 
     def test_a_task_that_is_not_due_is_left_alone(self):
         es, broker = self.run_tasks([self.task(next_run="2099-01-01T06:00:00+00:00")])

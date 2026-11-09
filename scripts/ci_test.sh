@@ -12,11 +12,13 @@
 # and cron, the lambda's notebook writer and reload detection, the importer, the converter, the
 # docker monitor and the runner's notifications; then 34 % the same day once the scheduler's
 # `checkTasks` loop was held (`nyx_reportscheduler.py` 52 % -> 70 %), the two helpers no script
-# imported were deleted (147 statements) and the example skeleton left the measure. Raise it as
-# tests land, never lower it.
+# imported were deleted (147 statements) and the example skeleton left the measure; then 41 %
+# once the runner's job itself was held (`nyx_reportrunner.py` 21 % -> 74 %: the four report
+# types, the PDF conversion, the download list and the always-sent step 3). Raise it as tests
+# land, never lower it.
 set -eu
 
-FLOOR=34
+FLOOR=41
 
 python -m pip install --quiet -r tests/requirements-test.txt
 python -m coverage erase
