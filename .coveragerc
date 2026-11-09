@@ -1,0 +1,17 @@
+# Coverage configuration for the containers.
+#
+# `nyx_skeleton.py` is a starting point copied into a new container, never deployed and never
+# imported by anything here: it is excluded from the measure rather than tested.
+#
+# Nothing else is omitted — in particular the `if __name__ == '__main__'` blocks stay in the
+# measure. Excluding them would hide the containers' wiring (clients, loops) and raise the
+# percentage without a single test, which is exactly what a floor is meant to prevent.
+
+[run]
+source = sources
+omit =
+    sources/nyx_skeleton.py
+
+[report]
+omit =
+    sources/nyx_skeleton.py

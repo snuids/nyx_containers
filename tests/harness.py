@@ -104,13 +104,18 @@ class FakeIndex:
 class FakeES:
     """Double of the Elasticsearch client, for the calls these scripts actually make."""
 
-    def __init__(self, documents=None, search_result=None, version="8.19.23"):
+    def __init__(self, documents=None, search_result=None, version="8.19.23",
+                 doc_type_refused=False):
         self.documents = documents or {}
         self.search_result = search_result
         self.version = version
+        # opensearch-py 2.x raises TypeError on `doc_type=`, which is why the callers wrap their
+        # first index/get in a try: this flag reproduces that client.
+        self.doc_type_refused = doc_type_refused
         self.bulk_calls = []
         self.bulk_result = {"errors": False, "items": []}
         self.gets = []
+        self.writes = []
         self.searches = []
         self.scrolls = []
         self.scroll_pages = []
@@ -120,10 +125,19 @@ class FakeES:
         return {"version": {"number": self.version}}
 
     def get(self, index=None, id=None, doc_type=None, **kwargs):
+        if doc_type is not None and self.doc_type_refused:
+            raise TypeError("get() got an unexpected keyword argument 'doc_type'")
         self.gets.append((index, id))
         if id in self.documents:
             return {"_id": id, "_index": index, "_source": self.documents[id]}
         raise LookupError("%s/%s" % (index, id))
+
+    def index(self, index=None, body=None, id=None, doc_type=None, **kwargs):
+        if doc_type is not None and self.doc_type_refused:
+            raise TypeError("index() got an unexpected keyword argument 'doc_type'")
+        self.writes.append((index, id, body))
+        return {"result": "updated", "_id": id}
+
 
     def search(self, index=None, body=None, doc_type=None, **kwargs):
         self.searches.append((index, body, kwargs))

@@ -10,10 +10,13 @@
 # The floor is the level actually measured, never a wish: 29 % on 2026-11-09, when the repository
 # went from no test at all to covering redaction, the bulk writer, the scheduler's date formulas
 # and cron, the lambda's notebook writer and reload detection, the importer, the converter, the
-# docker monitor and the runner's notifications. Raise it as tests land, never lower it.
+# docker monitor and the runner's notifications; then 34 % the same day once the scheduler's
+# `checkTasks` loop was held (`nyx_reportscheduler.py` 52 % -> 70 %), the two helpers no script
+# imported were deleted (147 statements) and the example skeleton left the measure. Raise it as
+# tests land, never lower it.
 set -eu
 
-FLOOR=29
+FLOOR=34
 
 python -m pip install --quiet -r tests/requirements-test.txt
 python -m coverage erase
