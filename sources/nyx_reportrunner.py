@@ -44,6 +44,9 @@ VERSION HISTORY
 * 04 Nov 2026 1.9.28 **AMA** The remaining paths that logged a job message raw (add-report and the STEP3 dispatch) are redacted too.
 * 04 Nov 2026 1.9.29 **AMA** Redaction is recursive and by key name, so a report definition's jdbc_password is masked too, wherever it sits.
 * 25 Oct 2026 1.9.24 **AMA** Send a WebSocket notification to the requesting user when a report finishes or fails.
+* 09 Nov 2026 1.9.30 **AMA** The report builders now expose a `main()` instead of running their generation at
+                     import, so the harness can drive them (they are tested at 89 % and 81 %).
+                     `insert_paragraph_after` no longer crashes when a cell gives it no style.
 """
 
 import os
@@ -70,7 +73,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.29"
+VERSION="1.9.30"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 

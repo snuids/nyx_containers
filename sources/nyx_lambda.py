@@ -47,6 +47,8 @@ there is a syntax error in the lambda.
 * 03 Nov 2026 1.6.1  **AMA** Same dependency refresh as reportrunner v1.9.25: Pillow 11.1.0 to 13.0.0, lxml 5.3.1 to 6.1.3, urllib3 2.3.0 to 2.8.0, requests 2.32.3 to 2.34.2, certifi 2025.1.31 to 2026.10.23.
 * 04 Nov 2026 1.6.2  **AMA** The command message is logged redacted: no session token, no user phone number.
 * 04 Nov 2026 1.6.3  **AMA** Same recursive redaction as reportrunner v1.9.29.
+* 09 Nov 2026 1.6.4  **AMA** A lambda that keeps its input no longer loses it when the inputs/ directory is
+                      missing: the tree is created with makedirs, the silent mkdir failure is gone.
 """
 import os
 import re
@@ -80,7 +82,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.6.3"
+VERSION="1.6.4"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
@@ -434,7 +436,9 @@ def save_log(logs,guid,lambdaname,runner,lamb,message=None,headers=None):
             jsonheaders=json.dumps(headers)
             
             try:
-                os.mkdir( path+"/inputs/"+lamb["orgfunction"]+"/")
+                # `makedirs`: `mkdir` needed `inputs/` to exist already, and its absence was
+                # swallowed by the bare except — the saved input was silently lost.
+                os.makedirs( path+"/inputs/"+lamb["orgfunction"]+"/", exist_ok=True)
             except:
                 pass
 
