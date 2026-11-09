@@ -1,0 +1,108 @@
+name: CI - Requirements7
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfiles/Dockerfilereportrunner'
+      - 'sources/requirements7.txt'
+      - 'sources/**'
+      - 'tests/**'
+      - 'scripts/ci_test.sh'
+      - '.github/workflows/ci-requirements7.yml'
+  # master too: a pull request is a promise, this is the proof. It also feeds the coverage badge.
+  push:
+    branches:
+      - master
+    paths:
+      - 'Dockerfiles/Dockerfilereportrunner'
+      - 'sources/requirements7.txt'
+      - 'sources/**'
+      - 'tests/**'
+      - 'scripts/ci_test.sh'
+      - '.github/workflows/ci-requirements7.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: requirements7-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # The report runner image is the one whose requirements cover every script in this
+      # repository (requirements7.txt: pandas, opensearch-py, amqstompclient, docker, openpyxl).
+      - name: Build the test image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfiles/Dockerfilereportrunner
+          load: true
+          push: false
+          tags: nyx_containers:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check Python dependencies
+        run: docker run --rm nyx_containers:ci pip check
+
+      - name: Compile Python sources
+        run: docker run --rm nyx_containers:ci python -m compileall -q /opt/sources
+
+      # The suite runs in the image that has just been built — the dependencies are already
+      # installed there — and the repository is mounted, so the tests exercise the code of the
+      # commit rather than the copy frozen in the image.
+      #
+      # Two ways this job could lie, hence the checks in the script: a skipped test still exits
+      # 0, and nothing would measure how much of these scripts is actually exercised.
+      - name: Run the test suite with coverage
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work -e TZ=Europe/Brussels \
+            nyx_containers:ci sh /work/scripts/ci_test.sh
+
+      # The badge the README shows, refreshed by the run that measured it — a typed-in number
+      # would be wrong the next time a test lands. It lives on its own branch so that master's
+      # history stays exactly the merged pull requests, and so this push cannot start a build.
+      - name: Publish the coverage badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          total=$(cat .coverage-total)
+          case "$total" in
+            9[0-9]|100)        colour=brightgreen ;;
+            8[0-9])            colour=green ;;
+            6[0-9]|7[0-9])     colour=yellowgreen ;;
+            4[0-9]|5[0-9])     colour=orange ;;
+            *)                 colour=red ;;
+          esac
+          mkdir -p badge && cd badge
+          git init -q .
+          git checkout -q -b badges
+          printf '{"schemaVersion": 1, "label": "coverage", "message": "%s%%", "color": "%s"}\n' \
+            "$total" "$colour" > coverage.json
+          git add coverage.json
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "coverage: ${total}%"
+          git push -q --force \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
+
+      - name: Show key versions
+        run: |
+          docker run --rm -i nyx_containers:ci python - <<'PY'
+          from importlib.metadata import version
+          for package in ["pandas", "numpy", "opensearch-py", "amqstompclient", "docker"]:
+              print(package, version(package))
+          PY
