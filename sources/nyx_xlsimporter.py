@@ -38,7 +38,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from lib import pandastoelastic as pte
 
 
-VERSION="0.0.4"
+VERSION="0.0.5"
 MODULE="XLS_IMPORTER"
 QUEUE=["FILE_UPLOAD_XLS"]
 
@@ -98,8 +98,8 @@ def messageReceived(destination,message,headers):
             continue
         if(col=="_id"):
             continue        
-        logger.info(col+" "+str(xlsdf.dtypes[index]))
-        typestr=str(xlsdf.dtypes[index])
+        logger.info(col+" "+str(xlsdf.dtypes.iloc[index]))
+        typestr=str(xlsdf.dtypes.iloc[index])
         finaltype="keyword"
         
         if "int" in typestr:

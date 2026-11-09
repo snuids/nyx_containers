@@ -28,7 +28,8 @@ importer = SCENARIO.load("nyx_xlsimporter").module
 
 # The importer reads the dtypes by position, which pandas 2.2 deprecates: the warning is noise
 # in the test output and does not change what is sent.
-warnings.filterwarnings("ignore", category=FutureWarning)
+# No `warnings.filterwarnings` here: the module used to read the dtypes by position, which pandas
+# 2.2 deprecates and pandas 3 removes. The test below asserts the warning is gone for good.
 
 
 def workbook(rows, sheet="Sheet1"):
@@ -113,6 +114,16 @@ class ImportTests(unittest.TestCase):
 
         self.assertEqual(self.es.indices.created[0][0], "reads")
         self.assertEqual(self.es.bulk_actions()[0]["index"]["_index"], "reads")
+
+    def test_reading_the_column_types_raises_no_deprecation_warning(self):
+        # pandas 2.2 warns on `series[index]` for a positional read; pandas 3 removes it. The
+        # importer reads the dtypes with `.iloc`, so the mapping inference stays quiet.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self.receive(workbook([("name", "count"), ("Namur", 12)]))
+
+        future = [w for w in caught if issubclass(w.category, FutureWarning)]
+        self.assertEqual([str(w.message) for w in future], [])
 
     def test_the_import_is_traced_on_the_log_queue(self):
         self.receive(workbook([("name",), ("Namur",)]))

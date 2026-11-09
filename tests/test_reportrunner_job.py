@@ -196,15 +196,17 @@ class ReportJobTests(unittest.TestCase):
         self.assertEqual(self.subprocess.popen, [])
         self.assertEqual(message["treatment"]["status"], "Error")
         self.assertIn("does not exist", message["treatment"]["error"])
-        # A job that never ran carries no download list at all; the notification reads it with
-        # `.get()`, so the absence has to stay harmless.
-        self.assertEqual(message.get("downloads") or [], [])
+        # The key is always there, empty when nothing was produced: the mail flow reads
+        # `downloads[0].url`, and an absent key used to break the notification instead of telling
+        # the user the report failed.
+        self.assertEqual(message["downloads"], [])
 
     def test_a_report_without_a_script_is_refused(self):
         message = self.run_job(without=("exec",))
 
         self.assertEqual(self.subprocess.popen, [])
         self.assertEqual(message["treatment"]["error"], "exec not defined")
+        self.assertEqual(message["downloads"], [])
 
     def test_a_builder_that_crashes_fails_the_job(self):
         self.subprocess.returncode = 2

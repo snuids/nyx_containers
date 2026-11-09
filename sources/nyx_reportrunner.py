@@ -47,6 +47,9 @@ VERSION HISTORY
 * 09 Nov 2026 1.9.30 **AMA** The report builders now expose a `main()` instead of running their generation at
                      import, so the harness can drive them (they are tested at 89 % and 81 %).
                      `insert_paragraph_after` no longer crashes when a cell gives it no style.
+* 09 Nov 2026 1.9.31 **AMA** The STEP3 message always carries `downloads`, empty when the job produced
+                     nothing: the mail flow reads `downloads[0].url`, so a failed report used to
+                     break its own notification instead of saying it had failed.
 """
 
 import os
@@ -73,7 +76,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.30"
+VERSION="1.9.31"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
@@ -206,6 +209,11 @@ def messageReceivedReport(destination,message,headers):
                 status="Error"
                 errormessage="Python file "+exec+" does not exist."
 
+    # `downloads` is set on every path, empty when nothing was produced: the Node-RED flow that
+    # builds the mail reads `downloads[0].url`, so a missing key breaks the notification instead
+    # of telling the user the report failed.
+    webs=[]
+
     if errormessage=="":        
         
         if reporttype=="jasper" or reporttype=="jasper_jdbc":
@@ -291,7 +299,6 @@ def messageReceivedReport(destination,message,headers):
                 status="Error"
                 errormessage="Python file "+exec+" crashed. Return code="+str(ret.returncode) 
 
-        webs=[]
         if errormessage=="":
             if "generatePDF" in messagejson["report"] and messagejson["report"]["generatePDF"]:
                 logger.info("Converting outputs to PDF.")
@@ -316,8 +323,8 @@ def messageReceivedReport(destination,message,headers):
                     break
                 
                 webs.append({"extension":output,"url":os.environ["REPORT_URL"]+"/"+messagejson["id"]+"."+output})
-            
-        messagejson["downloads"]=webs
+
+    messagejson["downloads"]=webs
 
     
 
