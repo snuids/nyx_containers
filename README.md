@@ -1,5 +1,8 @@
 # NYX Containers
 
+![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/snuids/nyx_containers/badges/coverage.json&style=flat-square)
+![CI](https://img.shields.io/github/actions/workflow/status/snuids/nyx_containers/ci-requirements7.yml?style=flat-square&label=tests)
+
 ![badge](https://img.shields.io/badge/made%20with-python-blue.svg?style=flat-square)
 ![badge](https://img.shields.io/github/languages/code-size/snuids/nyx_containers)
 ![badge](https://img.shields.io/github/last-commit/snuids/nyx_containers)
@@ -18,6 +21,40 @@ NYX docker containers. This repository contains the code used to build:
 
 # DOCS
 * Read The Docs (https://nyx-containers.readthedocs.io/en/latest/?)
+
+# TESTS
+
+```shell
+python -m unittest discover -s tests   # needs the dependencies of sources/requirements7.txt
+sh scripts/ci_test.sh                  # what the CI runs: coverage, and a floor under it
+```
+
+The scripts here are containers: everything that talks to the cluster, the broker or Redis lives
+under `if __name__ == '__main__'`, so the module imports but its functions expect the globals that
+block creates (`logger`, `es`, `conn`, `redisserver`). `tests/harness.py` imports a script and
+hands it those globals as doubles that record what would have left for the cluster or the broker;
+the tests assert on that. No container, no cluster, no broker is needed — the suite runs on a bare
+interpreter that has the requirements of `sources/requirements7.txt`.
+
+Coverage is measured by `scripts/ci_test.sh` and gated at 29 % (measured on 2026-11-09, from no
+test at all before that). Raise the floor as tests land, never lower it. What the suite holds
+today:
+
+| Module | Coverage | What it pins down |
+| --- | --- | --- |
+| `lib/redact.py` | 100 % | what a container may log: token, phone, `jdbc_password`, at any depth |
+| `lib/elastictopandas.py` | 100 % | the report query, its time range, and the scroll that fills the frame |
+| `lib/pandastoelastic.py` | 90 % | the bulk body: action/document pair, `@timestamp`, `NaT`, the 500 kB flush |
+| `nyx_xlsimporter.py` | 67 % | column types to mapping, index naming, the log messages |
+| `nyx_monitordocker.py` | 61 % | restart/stop/start of one named container, the `docker_status` documents |
+| `nyx_formatconverter.py` | 60 % | the contract around `convert.sh`: files, destination, original name |
+| `nyx_reportscheduler.py` | 52 % | `now-30d` formulas, the UI weekdays to cron, the dispatched job |
+| `nyx_lambda.py` | 22 % | notebook template, function renaming, reload detection through Redis |
+| `nyx_reportrunner.py` | 21 % | the notification pushed to the interface, and its languages |
+
+Not covered yet: the two report builders (`nyx_buildreport.py`, `nyx_buildreport_doc.py`), the
+example `nyx_skeleton.py`, and two helpers no script imports (`lib/connect_amq.py`,
+`lib/reporthelper.py`) — 603 statements with no test and, for the helpers, no caller.
 
 # BUILDING
 
