@@ -19,6 +19,9 @@ VERSION HISTORY
 * 09 Nov 2026 1.0.10 **AMA** A late task is rescheduled from now, not from its stored next run: after a
                               stop longer than the period it used to stay due and fire on every tick,
                               generating and mailing a report every ten seconds until it caught up.
+* 09 Nov 2026 1.0.11 **AMA** The mail subject of a periodic report is resolved in `task.mailSubject`,
+                              which is what the Node-RED flow builds the mail from: it used to test
+                              the key on the message it had just built and always sent "NA".
  
 """
 import re
@@ -42,7 +45,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 from dateutil import parser
 
-VERSION="1.0.10"
+VERSION="1.0.11"
 MODULE="ReportScheduler"
 QUEUE=[]
 
@@ -147,10 +150,12 @@ def execute_report(duetime,task):
 
     if "attachmentName" in task:
         message["mailAttachmentName"]=resolveDateString(task["attachmentName"],duetime)
-    if "mailSubject" in message:
-        message["mailSubject"]=resolveDateString(task["mailSubject"],duetime)
-    else:
-        message["mailSubject"]="NA"
+    # The mail is built by the Node-RED flow from `task.mailSubject`, not from this message: the
+    # subject has to be resolved *in the task*, otherwise a `${DATE:...}` reaches the recipient as
+    # written. `message["mailSubject"]` is kept for the consumers that read the job itself.
+    if task.get("mailSubject"):
+        task["mailSubject"]=resolveDateString(task["mailSubject"],duetime)
+    message["mailSubject"]=task.get("mailSubject") or "NA"
         
     logger.info(json.dumps(redact_message(message)))
 

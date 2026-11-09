@@ -49,6 +49,8 @@ there is a syntax error in the lambda.
 * 04 Nov 2026 1.6.3  **AMA** Same recursive redaction as reportrunner v1.9.29.
 * 09 Nov 2026 1.6.4  **AMA** A lambda that keeps its input no longer loses it when the inputs/ directory is
                       missing: the tree is created with makedirs, the silent mkdir failure is gone.
+* 09 Nov 2026 1.6.5  **AMA** A notebook directory without requirements.txt no longer crashes the first run:
+                      the copy that raised (FileNotFoundError, at startup, on a fresh volume) is gone.
 """
 import os
 import re
@@ -82,7 +84,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.6.4"
+VERSION="1.6.5"
 MODULE="NYX_Lambda"
 QUEUE=["/topic/NYX_LAMBDA_COMMAND"]
 
@@ -701,7 +703,12 @@ def checkIfRequirementsChanged():
         f = open(firtstrun, "a")
         f.write("FIRST RUN")
         f.close()
-    
+        if not os.path.isfile(curf):
+            # A notebook directory without requirements.txt is legitimate — and `copyfile` used to
+            # raise here, at startup, on a fresh volume.
+            logger.info("No requirements.txt in %s: nothing to install.", path)
+            return False
+
     logger.info("Must install requirements...")
     copyfile(curf,prevf)
     ret=subprocess.Popen(["pip","install","-r","requirements.txt"],cwd=path, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

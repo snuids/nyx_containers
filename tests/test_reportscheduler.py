@@ -175,10 +175,19 @@ class ExecuteReportTests(unittest.TestCase):
                                    "attachmentName": "Mensuel-${DATE:%Y%m%d:now-1d}"})
         self.assertEqual(message["mailAttachmentName"], "Mensuel-20261108")
 
-    def test_the_mail_subject_is_na_when_the_task_has_none(self):
-        # `execute_report` looks for `mailSubject` on the message it builds, which never has it:
-        # the subject is always "NA". Pinned so the day it is fixed, the change is deliberate.
-        message = self.dispatched({"report": "monthly", "mailSubject": "Rapport mensuel"})
+    def test_the_subject_of_the_task_is_used_and_resolved_in_the_task(self):
+        # The mail is built by the Node-RED flow from `task.mailSubject`: the subject has to be
+        # resolved there, otherwise a `${DATE:...}` reaches the recipient as written. The route
+        # used to look for the key on the message it had just built, so the subject was "NA" and
+        # the task's own value was ignored.
+        message = self.dispatched({"report": "monthly",
+                                   "mailSubject": "Mensuel ${DATE:%Y%m%d:now-1d}"})
+
+        self.assertEqual(message["task"]["mailSubject"], "Mensuel 20261108")
+        self.assertEqual(message["mailSubject"], "Mensuel 20261108")
+
+    def test_a_task_without_a_subject_still_says_na(self):
+        message = self.dispatched({"report": "monthly"})
         self.assertEqual(message["mailSubject"], "NA")
 
     def test_the_report_is_read_without_doc_type_when_the_client_refuses_it(self):

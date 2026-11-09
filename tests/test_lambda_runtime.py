@@ -456,6 +456,14 @@ class CheckRequirementsTests(LambdaTestCase):
         self.assertTrue(lambdas.checkIfRequirementsChanged())
         self.assertEqual(len(self.popens), 2)
 
+    def test_a_fresh_volume_without_requirements_installs_nothing(self):
+        # `firstrun.txt` is written, then the copy of requirements.txt used to raise: on a new
+        # volume without that file, the lambda crashed at startup.
+        self.assertFalse(lambdas.checkIfRequirementsChanged())
+
+        self.assertEqual(self.popens, [])
+        self.assertTrue(os.path.exists(os.path.join(self.directory, "firstrun.txt")))
+
     def test_requirements_that_disappear_are_not_reinstalled(self):
         # Once the first run has happened, a notebook directory without requirements.txt simply
         # has nothing to install.
