@@ -1,0 +1,7 @@
+# What the Read the Docs build needs, and nothing more.
+#
+# It used to install `sources/requirements.txt` — the Python 3.7-era list of the container runtime
+# — to build four pages of prose. That file is gone with the legacy Dockerfiles that used it, and
+# bringing pandas, numpy and a 2018 Flask into the documentation build was never needed.
+sphinx>=7.2
+sphinx-rtd-theme>=2.0

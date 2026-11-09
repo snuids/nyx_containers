@@ -22,6 +22,10 @@ VERSION HISTORY
 * 09 Nov 2026 1.0.11 **AMA** The mail subject of a periodic report is resolved in `task.mailSubject`,
                               which is what the Node-RED flow builds the mail from: it used to test
                               the key on the message it had just built and always sent "NA".
+* 09 Nov 2026 1.0.12 **AMA** A task saved without any day fires again: an empty selection produced
+                              "30 7 * * ", which CronTab refuses, and the exception was swallowed
+                              per task — the task had stopped for good. Empty now means every day
+                              (daily) or the first of the month (monthly).
  
 """
 import re
@@ -45,7 +49,7 @@ from elasticsearch import Elasticsearch as ES, RequestsHttpConnection as RC
 from logstash_async.handler import AsynchronousLogstashHandler
 from dateutil import parser
 
-VERSION="1.0.11"
+VERSION="1.0.12"
 MODULE="ReportScheduler"
 QUEUE=[]
 
@@ -70,20 +74,38 @@ def resolveDateString(name,adate):
     
     return  result
 
+def cronDays(triggertype, days):
+    """The day field of the cron expression, and what an empty selection means.
+
+    A task saved without any day produced "30 7 * * " — four fields, which `CronTab` refuses.
+    `checkTasks` swallows the exception per task, so the task stopped firing for good and the only
+    trace was "Unable to process task". An empty selection now means every day for a daily
+    trigger, and the first of the month for a monthly one.
+    """
+    if triggertype=="daily":
+        if not days:
+            return "*"
+        # The interface numbers the days from Monday (0), cron numbers them from Sunday.
+        return ",".join(str(value) for value in sorted((int(day)+1)%7 for day in days))
+    if not days:
+        return "1"
+    return ",".join(str(value) for value in sorted(int(day) for day in days))
+
+
 def computeCronOfTask(taskin,curtime):
     triggertype=taskin["trigger"]["type"]
+    triggertime=taskin["trigger"]["time"].split(":")
+    minutes=int(triggertime[1])
+    hours=int(triggertime[0])
+
     if triggertype=="daily":
-        triggertime=taskin["trigger"]["time"].split(":")
-        days=[str((_+1)%7) for _ in taskin["trigger"]["days"]]
-        days.sort()
-        cron=str(int(triggertime[1]))+" "+str(int(triggertime[0]))+" * * "+",".join(days)
-        
-    if triggertype=="monthly":
-        triggertime=taskin["trigger"]["time"].split(":")
-        days=[str((_)) for _ in taskin["trigger"]["days"]]    
-        days.sort()
-        cron=str(int(triggertime[1]))+" "+str(int(triggertime[0]))+" "+",".join(days)+" * *"
-        
+        cron="%d %d * * %s" % (minutes,hours,cronDays("daily",taskin["trigger"]["days"]))
+    elif triggertype=="monthly":
+        cron="%d %d %s * *" % (minutes,hours,cronDays("monthly",taskin["trigger"]["days"]))
+    else:
+        # Used to leave `cron` unbound: an UnboundLocalError, swallowed by the caller.
+        raise ValueError("unknown trigger type: %r" % (triggertype,))
+
     crontab=CronTab(cron)
     nextrun=curtime+timedelta(seconds=crontab.next(curtime,default_utc=True))
     

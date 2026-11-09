@@ -95,6 +95,38 @@ class ComputeCronOfTaskTests(unittest.TestCase):
         cron, _ = scheduler.computeCronOfTask(task, self.curtime)
         self.assertEqual(cron, "0 6 * * 0")
 
+    def test_a_daily_task_saved_without_a_day_runs_every_day(self):
+        """A task with no day used to produce "30 7 * * " — four fields, which CronTab refuses.
+
+        `checkTasks` swallows the exception per task, so the task stopped firing for good with
+        "Unable to process task" as its only trace.
+        """
+        task = {"trigger": {"type": "daily", "time": "07:30", "days": []}}
+
+        cron, nextrun = scheduler.computeCronOfTask(task, self.curtime)
+
+        self.assertEqual(cron, "30 7 * * *")
+        self.assertGreater(nextrun, self.curtime)
+        self.assertLess(nextrun, self.curtime + datetime.timedelta(days=1))
+
+    def test_a_monthly_task_saved_without_a_day_runs_on_the_first(self):
+        task = {"trigger": {"type": "monthly", "time": "07:30", "days": []}}
+        cron, _ = scheduler.computeCronOfTask(task, self.curtime)
+        self.assertEqual(cron, "30 7 1 * *")
+
+    def test_the_days_of_the_month_are_sorted_as_numbers(self):
+        # As strings, "10" came before "2": harmless for cron, but the expression was not the
+        # one a human reads.
+        task = {"trigger": {"type": "monthly", "time": "07:30", "days": [10, 2]}}
+        cron, _ = scheduler.computeCronOfTask(task, self.curtime)
+        self.assertEqual(cron, "30 7 2,10 * *")
+
+    def test_an_unknown_trigger_is_refused_with_a_message(self):
+        task = {"trigger": {"type": "hourly", "time": "07:30", "days": [1]}}
+        with self.assertRaises(ValueError) as refused:
+            scheduler.computeCronOfTask(task, self.curtime)
+        self.assertIn("hourly", str(refused.exception))
+
     def test_a_monthly_task_uses_the_day_of_the_month(self):
         task = {"trigger": {"type": "monthly", "time": "23:15", "days": [1, 15]}}
 

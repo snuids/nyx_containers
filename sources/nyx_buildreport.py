@@ -233,7 +233,7 @@ def main(argv=None, client=None):
                                             else:
                                               logger_info(">>> CODE:"+linecodes[i])
 
-                               except e:
+                               except Exception:
                                     logger_error("ERROR while decoding error",exc_info=True)
 
                         save_log()

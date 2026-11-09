@@ -50,6 +50,8 @@ VERSION HISTORY
 * 09 Nov 2026 1.9.31 **AMA** The STEP3 message always carries `downloads`, empty when the job produced
                      nothing: the mail flow reads `downloads[0].url`, so a failed report used to
                      break its own notification instead of saying it had failed.
+* 09 Nov 2026 1.9.32 **AMA** The builders catch `Exception` where a decoding error was caught with
+                     `except e:` (a NameError in Python 3) — the branch could not run.
 """
 
 import os
@@ -76,7 +78,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.31"
+VERSION="1.9.32"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
