@@ -181,6 +181,126 @@ class ExecuteReportTests(unittest.TestCase):
         message = self.dispatched({"report": "monthly", "mailSubject": "Rapport mensuel"})
         self.assertEqual(message["mailSubject"], "NA")
 
+    def test_the_report_is_read_without_doc_type_when_the_client_refuses_it(self):
+        # The installed client is opensearch-py 2.x: `doc_type=` raises, and the callers retry
+        # without it. Without this path the scheduler would send jobs with an empty report.
+        scheduler.es = FakeES(documents={"monthly": self.report()}, doc_type_refused=True)
+
+        message = self.dispatched({"report": "monthly"})
+
+        self.assertEqual(message["report"]["title"], "Monthly")
+
+    def report(self):
+        return {"title": "Monthly",
+                "parameters": [{"name": "site", "type": "escombo", "value": "Namur"}]}
+
+
+class CheckTasksTests(unittest.TestCase):
+    """`checkTasks` walks `nyx_reportperiodic` on a timer: what is due, what is not.
+
+    This is the loop that decides a periodic report fires. It catches every exception per task,
+    so a single broken task used to stop the others without a red run anywhere.
+    """
+
+    def setUp(self):
+        scheduler.conn = FakeBroker()
+        self.addCleanup(setattr, scheduler, "conn", None)
+
+    def task(self, identifier="t1", next_run="2020-01-01T06:00:00+00:00", report="monthly",
+             trigger=None):
+        source = {"report": report, "title": "Monthly",
+                  "trigger": trigger or {"type": "daily", "time": "06:00", "days": [0]}}
+        if next_run is not None:
+            source["nextRun"] = next_run
+        return {"_id": identifier, "_index": "nyx_reportperiodic", "_source": source}
+
+    def run_tasks(self, tasks, documents=None, doc_type_refused=False):
+        es = FakeES(documents=documents if documents is not None
+                    else {"monthly": {"title": "Monthly", "parameters": [
+                        {"name": "site", "type": "escombo", "value": "Namur"}]}},
+                    doc_type_refused=doc_type_refused)
+        es.search_result = {"hits": {"hits": tasks}}
+        scheduler.es = es
+        self.addCleanup(setattr, scheduler, "es", None)
+        scheduler.checkTasks()
+        return es, scheduler.conn
+
+    def test_a_due_task_is_rescheduled_and_dispatched(self):
+        es, broker = self.run_tasks([self.task()])
+
+        self.assertEqual(len(es.writes), 1, "the next run is written back on the task")
+        index, identifier, body = es.writes[0]
+        self.assertEqual((index, identifier), ("nyx_reportperiodic", "t1"))
+        self.assertNotEqual(body["nextRun"], "2020-01-01T06:00:00+00:00")
+        self.assertEqual(len(broker.sent_to("/queue/NYX_REPORT_STEP1")), 1)
+
+    def test_a_task_late_by_more_than_one_period_is_dispatched_again(self):
+        """Known defect: the next run is computed from the *stored* one, not from `now`.
+
+        `checkTasks` passes `nextrun + 1h` to `computeCronOfTask`, where `nextrun` is the date
+        read from the task — so a task late by more than one period is rescheduled one occurrence
+        at a time and stays due. After a stop longer than the period (a deploy, a crash), it fires
+        again on the next tick: one report generated and mailed per tick until it catches up.
+        Pinned here so the day it is fixed, the change is deliberate.
+        """
+        late = (datetime.datetime.now() - datetime.timedelta(days=3)).replace(
+            hour=6, minute=0, second=0, microsecond=0).isoformat()
+
+        es, broker = self.run_tasks([self.task(next_run=late)])
+
+        rescheduled = datetime.datetime.fromisoformat(es.writes[0][2]["nextRun"])
+        self.assertLess(rescheduled, datetime.datetime.now().astimezone(rescheduled.tzinfo),
+                        "still in the past: the next tick will fire again")
+        self.assertEqual(len(broker.sent_to("/queue/NYX_REPORT_STEP1")), 1)
+
+    def test_a_task_that_is_not_due_is_left_alone(self):
+        es, broker = self.run_tasks([self.task(next_run="2099-01-01T06:00:00+00:00")])
+
+        self.assertEqual(es.writes, [])
+        self.assertEqual(broker.messages, [])
+
+    def test_a_task_without_a_next_run_is_ignored(self):
+        es, broker = self.run_tasks([self.task(next_run=None)])
+        self.assertEqual(es.writes, [])
+        self.assertEqual(broker.messages, [])
+
+    def test_a_broken_task_does_not_stop_the_others(self):
+        broken = self.task(identifier="broken", trigger={"type": "daily"})   # no `time`
+        due = self.task(identifier="t2")
+
+        es, broker = self.run_tasks([broken, due])
+
+        self.assertEqual([write[1] for write in es.writes], ["t2"],
+                         "the second task is still processed")
+        self.assertEqual(len(broker.sent_to("/queue/NYX_REPORT_STEP1")), 1)
+
+    def test_a_deleted_report_does_not_stop_the_others(self):
+        es, broker = self.run_tasks([self.task(identifier="gone", report="deleted"),
+                                     self.task(identifier="t2")])
+
+        self.assertEqual(len(es.writes), 2, "both tasks are still rescheduled")
+        self.assertEqual(len(broker.sent_to("/queue/NYX_REPORT_STEP1")), 1,
+                         "only the task whose report exists produces a job")
+
+    def test_the_task_is_written_back_when_the_client_refuses_doc_type(self):
+        es, broker = self.run_tasks([self.task()], doc_type_refused=True)
+
+        self.assertEqual(len(es.writes), 1)
+        self.assertEqual(len(broker.sent_to("/queue/NYX_REPORT_STEP1")), 1)
+
+
+class MessageReceivedTests(unittest.TestCase):
+    """A task arriving on the command queue is logged, redacted."""
+
+    def test_the_logged_task_carries_no_token(self):
+        with self.assertLogs(level="INFO") as captured:
+            scheduler.messageReceived("NYX_REPORT_COMMAND",
+                                      json.dumps({"token": "live-token", "report": "monthly"}), {})
+
+        output = "\n".join(captured.output)
+        self.assertNotIn("live-token", output)
+        self.assertIn("***", output)
+
 
 if __name__ == "__main__":
     unittest.main()

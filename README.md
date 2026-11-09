@@ -36,7 +36,7 @@ hands it those globals as doubles that record what would have left for the clust
 the tests assert on that. No container, no cluster, no broker is needed — the suite runs on a bare
 interpreter that has the requirements of `sources/requirements7.txt`.
 
-Coverage is measured by `scripts/ci_test.sh` and gated at 29 % (measured on 2026-11-09, from no
+Coverage is measured by `scripts/ci_test.sh` and gated at 34 % (measured on 2026-11-09, from no
 test at all before that). Raise the floor as tests land, never lower it. What the suite holds
 today:
 
@@ -45,16 +45,20 @@ today:
 | `lib/redact.py` | 100 % | what a container may log: token, phone, `jdbc_password`, at any depth |
 | `lib/elastictopandas.py` | 100 % | the report query, its time range, and the scroll that fills the frame |
 | `lib/pandastoelastic.py` | 90 % | the bulk body: action/document pair, `@timestamp`, `NaT`, the 500 kB flush |
+| `nyx_reportscheduler.py` | 70 % | `now-30d` formulas, the UI weekdays to cron, `checkTasks`: due, not due, broken |
 | `nyx_xlsimporter.py` | 67 % | column types to mapping, index naming, the log messages |
 | `nyx_monitordocker.py` | 61 % | restart/stop/start of one named container, the `docker_status` documents |
 | `nyx_formatconverter.py` | 60 % | the contract around `convert.sh`: files, destination, original name |
-| `nyx_reportscheduler.py` | 52 % | `now-30d` formulas, the UI weekdays to cron, the dispatched job |
 | `nyx_lambda.py` | 22 % | notebook template, function renaming, reload detection through Redis |
 | `nyx_reportrunner.py` | 21 % | the notification pushed to the interface, and its languages |
 
-Not covered yet: the two report builders (`nyx_buildreport.py`, `nyx_buildreport_doc.py`), the
-example `nyx_skeleton.py`, and two helpers no script imports (`lib/connect_amq.py`,
-`lib/reporthelper.py`) — 603 statements with no test and, for the helpers, no caller.
+`.coveragerc` leaves one file out of the measure: `nyx_skeleton.py`, the example copied into a new
+container. Nothing that runs is omitted — in particular the `if __name__ == '__main__'` blocks stay
+in the denominator, because excluding them would raise the percentage without a test.
+
+Not covered yet: the two report builders (`nyx_buildreport.py`, `nyx_buildreport_doc.py`, 400
+statements). They run their whole generation at import — there is no `main()` to call — so they
+have to be made importable before they can be tested.
 
 # BUILDING
 
