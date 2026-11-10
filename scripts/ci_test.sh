@@ -21,9 +21,14 @@
 # 74 % since the XLS importer was retired: it was covered at 67 % and its bulk writer at 90 %, so
 # deleting them (177 statements) mechanically lowers the ratio. The floor follows what is measured,
 # down only when well-covered code leaves, never because a test was dropped.
+#
+# 84 % once `tests/test_entrypoints.py` ran the `if __name__ == '__main__'` blocks of the five
+# containers — the 268 statements that only ever ran inside a live container (85,4 % measured:
+# formatconverter 60 -> 93, scheduler 72 -> 91, monitordocker 61 -> 89, runner 74 -> 86,
+# lambda 72 -> 80).
 set -eu
 
-FLOOR=74
+FLOOR=84
 
 python -m pip install --quiet -r tests/requirements-test.txt
 python -m coverage erase

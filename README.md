@@ -35,25 +35,27 @@ hands it those globals as doubles that record what would have left for the clust
 the tests assert on that. No container, no cluster, no broker is needed — the suite runs on a bare
 interpreter that has the requirements of `sources/requirements7.txt`.
 
-Coverage is measured by `scripts/ci_test.sh` and gated at 74 % (measured on 2026-11-09, after the XLS importer was
-retired; the floor rounds the measured 74.8 %). Raise the floor as tests land, never lower it. What the suite holds
-today:
+Coverage is measured by `scripts/ci_test.sh` and gated at 84 % (measured on 2026-11-09: **85,4 %**, 1 507 of
+1 765 statements). Raise the floor as tests land, never lower it. What the suite holds today:
 
 | Module | Coverage | What it pins down |
 | --- | --- | --- |
 | `lib/redact.py` | 100 % | what a container may log: token, phone, `jdbc_password`, at any depth |
 | `lib/elastictopandas.py` | 100 % | the report query, its time range, and the scroll that fills the frame |
+| `nyx_formatconverter.py` | 93 % | the contract around `convert.sh`, and the container's startup |
+| `nyx_reportscheduler.py` | 91 % | `now-30d` formulas, the UI weekdays to cron, `checkTasks`: due, not due, late, broken, and its `__main__` |
 | `nyx_buildreport.py` | 89 % | the python/xlsx builder: parameters, `#@ONLOAD` cells, the report log |
+| `nyx_monitordocker.py` | 89 % | restart/stop/start of one named container, the `docker_status` documents, the daemon reading at startup |
+| `nyx_reportrunner.py` | 86 % | the job itself: the four report types, the PDF conversion, the downloads, the always-sent step 3 |
 | `nyx_buildreport_doc.py` | 81 % | the docx builder: placeholders, table cells, the document it writes |
-| `nyx_reportrunner.py` | 74 % | the job itself: the four report types, the PDF conversion, the downloads, the always-sent step 3 |
-| `nyx_lambda.py` | 72 % | `loadConfig` (topics, cron, interval, restapi), dispatch, run logs, stats, requirements |
-| `nyx_reportscheduler.py` | 70 % | `now-30d` formulas, the UI weekdays to cron, `checkTasks`: due, not due, late, broken |
-| `nyx_monitordocker.py` | 61 % | restart/stop/start of one named container, the `docker_status` documents |
-| `nyx_formatconverter.py` | 60 % | the contract around `convert.sh`: files, destination, original name |
+| `nyx_lambda.py` | 80 % | `loadConfig` (topics, cron, interval, restapi), dispatch, run logs, stats, requirements, the startup |
 
 `.coveragerc` leaves one file out of the measure: `nyx_skeleton.py`, the example copied into a new
 container. Nothing that runs is omitted — in particular the `if __name__ == '__main__'` blocks stay
-in the denominator, because excluding them would raise the percentage without a test.
+in the denominator, and `tests/test_entrypoints.py` executes them as the container does (`runpy`
+with `run_name="__main__"`, the broker/cluster/Docker/Redis doubles, and a `sleep` that cuts the
+loop after one turn): what they send to the broker as a life sign is asserted, the secrets are not
+in the logs, and the module names follow the `RUNNER` variable.
 
 The two report builders and the lambda used to run their whole generation at import, which is why
 they could not be tested at all: each now exposes a `main(argv=None, client=None)` — the runner
