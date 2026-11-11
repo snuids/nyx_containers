@@ -48,7 +48,7 @@ VERSION HISTORY
                      import, so the harness can drive them (they are tested at 89 % and 81 %).
                      `insert_paragraph_after` no longer crashes when a cell gives it no style.
 * 09 Nov 2026 1.9.31 **AMA** The STEP3 message always carries `downloads`, empty when the job produced
-* 11 Nov 2026 1.9.32 **AMA** The Jasper request is logged masked: the body carried the user's token in
+* 11 Nov 2026 1.9.33 **AMA** The Jasper request is logged masked: the body carried the user's token in
                      clear and its `jsonUrl` carried it again as a query parameter. `lib/redact.py`
                      now also masks `?token=`/`&password=` inside values, for every worker that logs
                      through it.
