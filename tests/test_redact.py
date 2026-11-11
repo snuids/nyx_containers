@@ -81,6 +81,25 @@ class RedactMessageTests(unittest.TestCase):
     def test_a_plain_string_passes_through(self):
         self.assertEqual(redact_message("hello"), "hello")
 
+    def test_a_token_inside_a_url_is_masked(self):
+        # The Jasper call receives the datasource URL, token included, as a plain value: a rule that
+        # only looks at key names lets it through.
+        redacted = redact_message({"jsonUrl": "https://host/api/v1/datasource/sites?token=abc&flat=true"})
+
+        self.assertEqual(redacted["jsonUrl"],
+                         "https://host/api/v1/datasource/sites?token=***&flat=true")
+
+    def test_a_password_inside_a_jdbc_url_is_masked(self):
+        value = "jdbc:sqlserver://db:1433;databaseName=nyx;password=S3cret!;user=nyx"
+
+        self.assertEqual(redact_message({"jdbc_url": value})["jdbc_url"],
+                         "jdbc:sqlserver://db:1433;databaseName=nyx;password=***;user=nyx")
+
+    def test_an_ordinary_url_is_left_alone(self):
+        url = "https://host/generatedreports/id_1_2.xlsx"
+
+        self.assertEqual(redact_message({"downloads": [{"url": url}]})["downloads"][0]["url"], url)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -48,6 +48,10 @@ VERSION HISTORY
                      import, so the harness can drive them (they are tested at 89 % and 81 %).
                      `insert_paragraph_after` no longer crashes when a cell gives it no style.
 * 09 Nov 2026 1.9.31 **AMA** The STEP3 message always carries `downloads`, empty when the job produced
+* 11 Nov 2026 1.9.32 **AMA** The Jasper request is logged masked: the body carried the user's token in
+                     clear and its `jsonUrl` carried it again as a query parameter. `lib/redact.py`
+                     now also masks `?token=`/`&password=` inside values, for every worker that logs
+                     through it.
                      nothing: the mail flow reads `downloads[0].url`, so a failed report used to
                      break its own notification instead of saying it had failed.
 * 09 Nov 2026 1.9.32 **AMA** The builders catch `Exception` where a decoding error was caught with
@@ -247,7 +251,9 @@ def messageReceivedReport(destination,message,headers):
                         postbody["jsonUrl"]=postbody["jsonUrl"]+"&start="+param["value"][0]+"&end="+param["value"][1]
                 logger.info("===>"*10)
                 logger.info("Calling:"+os.environ["JASPER_API"])
-                logger.info("Posting to Jasper Generator API: " + json.dumps(postbody))
+                # The body carries the user's token, and `jsonUrl` carries it again as a query
+                # parameter: log it masked, like every other message of this worker.
+                logger.info("Posting to Jasper Generator API: " + json.dumps(redact_message(postbody)))
                 
                 # POST request to JASPER_API
                 response = requests.post(os.environ["JASPER_API"], json=postbody)

@@ -277,6 +277,18 @@ class ReportJobTests(unittest.TestCase):
         self.assertIn("&start=2026-11-01T00:00:00Z&end=2026-11-08T00:00:00Z", body["jsonUrl"])
         self.assertEqual(message["treatment"]["status"], "Finished")
 
+    def test_the_jasper_request_is_logged_without_the_user_token(self):
+        """The body carries `token`, and `jsonUrl` carries it again as a query parameter."""
+        with self.assertLogs(level="INFO") as captured:
+            self.run_job(reportType="jasper", jasper="monthly.jrxml", datasource="sites", output=[],
+                         parameters=[{"name": "period", "type": "interval",
+                                      "value": ["2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z"]}])
+
+        logged = "\n".join(captured.output)
+        self.assertIn("Posting to Jasper Generator API", logged)
+        self.assertNotIn("token-42", logged, "the session token reached the log")
+        self.assertIn("token=***", logged, "the token inside jsonUrl is not masked")
+
     def test_a_jasper_report_without_a_datasource_is_refused(self):
         message = self.run_job(reportType="jasper", jasper="monthly.jrxml")
 

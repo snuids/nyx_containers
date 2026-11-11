@@ -7,10 +7,20 @@ scheduler and the report builder all log through this module so the rule lives i
 
 Mask by key name at any depth rather than by position: the secret moved between a top-level `creds`
 and a nested `report` in the same year.
+
+A secret also travels *inside a value*: the datasource URL handed to the Jasper creator carries the
+user's token as `?token=…`, and a key-name rule cannot see it. Strings are therefore rewritten too,
+on the same parameter names as the API's own masking.
 """
+
+import re
 
 SENSITIVE_KEY_MARKERS = ("password", "token", "secret")
 SENSITIVE_KEYS = ("phone",)
+
+# `?token=`, `&token=`, `;password=` in a URL or a JDBC string: the value stops at the next separator.
+SENSITIVE_PARAMETER = re.compile(
+    r"([?&;](?:token|password|passwd|secret|key|apikey)=)[^&;\s\"'<>]*", re.I)
 
 
 def _is_sensitive_key(key):
@@ -26,6 +36,8 @@ def redact_message(message):
                     for key, value in node.items()}
         if isinstance(node, list):
             return [walk(item) for item in node]
+        if isinstance(node, str):
+            return SENSITIVE_PARAMETER.sub(r"\1***", node)
         return node
 
     try:
