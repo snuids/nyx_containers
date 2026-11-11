@@ -26,7 +26,7 @@ from harness import FakeES, FakeRedis                                         # 
 
 SOURCES = Path(__file__).resolve().parents[1] / "sources"
 
-# Ce que le compose donne aux conteneurs ; seules les valeurs comptent, pas leur realite.
+# What the compose file gives the containers; only the values matter, not whether they exist.
 ENV = {
     "AMQC_URL": "broker.example",
     "AMQC_PORT": "61613",
@@ -123,13 +123,13 @@ class EntrypointTest(unittest.TestCase):
         os.chdir(self.temporary.name)
         self.addCleanup(os.chdir, self.previous_cwd)
         os.makedirs("logs", exist_ok=True)
-        # `nyx_lambda` ecrit `firstrun.txt` dans ./notebooks au premier demarrage, puis lit les
-        # exigences : le repertoire doit exister, comme dans l'image.
+        # `nyx_lambda` writes `firstrun.txt` into ./notebooks on its first start, then reads the
+        # requirements from it: the directory has to exist, as it does in the image.
         os.makedirs("notebooks", exist_ok=True)
         self.saved_env = dict(os.environ)
         self.addCleanup(self._restore_env)
         os.environ.update(ENV)
-        # Les scripts posent un handler sur le logger racine a chaque demarrage.
+        # The scripts put a handler on the root logger on every start.
         root = logging.getLogger()
         saved_handlers = list(root.handlers)
         self.addCleanup(root.handlers.__setitem__, slice(None), saved_handlers)
@@ -145,8 +145,8 @@ class EntrypointTest(unittest.TestCase):
         sleeps = {"count": 0}
 
         def sleep_once(seconds):
-            # Premier appel : l'iteration tourne. Deuxieme : on sort de `while True`, comme le
-            # ferait un arret du conteneur.
+            # First call: the iteration runs. Second: `while True` is left, the way a container
+            # stop would do it.
             sleeps["count"] += 1
             if sleeps["count"] > 1:
                 raise LoopStopped(seconds)
@@ -169,9 +169,9 @@ class EntrypointTest(unittest.TestCase):
         with ExitStack() as stack:
             stack.enter_context(mock.patch("time.sleep", side_effect=sleep_once))
             stack.enter_context(mock.patch("%s.AMQClient" % _amq(script), side_effect=amq_factory))
-            # Les scripts importent l'un ou l'autre client : on remplace les deux, le nom retenu
-            # par le script decide duquel il s'agit (`nyx_lambda` garde l'ancien import en
-            # commentaire, ce qui suffisait a tromper un choix fait sur le texte du fichier).
+            # The scripts import one client or the other: both are replaced, and the name the
+            # script keeps decides which one it is (`nyx_lambda` keeps the old import in a
+            # comment, which was enough to defeat a choice made by reading the file's text).
             stack.enter_context(mock.patch("opensearchpy.OpenSearch", side_effect=es_factory))
             stack.enter_context(mock.patch("elasticsearch.Elasticsearch", side_effect=es_factory))
             stack.enter_context(mock.patch("docker.from_env", return_value=fakes["docker"]))
