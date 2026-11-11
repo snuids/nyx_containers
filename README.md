@@ -35,8 +35,8 @@ hands it those globals as doubles that record what would have left for the clust
 the tests assert on that. No container, no cluster, no broker is needed — the suite runs on a bare
 interpreter that has the requirements of `sources/requirements7.txt`.
 
-Coverage is measured by `scripts/ci_test.sh` and gated at 84 % (measured on 2026-11-09: **85,4 %**, 1 507 of
-1 765 statements). Raise the floor as tests land, never lower it. What the suite holds today:
+Coverage is measured by `scripts/ci_test.sh` and gated at 84 % (measured on 2026-11-11: **85,4 %**,
+1 507 of 1 765 statements, 174 tests). Raise the floor as tests land, never lower it. What the suite holds today:
 
 | Module | Coverage | What it pins down |
 | --- | --- | --- |
