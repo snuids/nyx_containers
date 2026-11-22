@@ -282,6 +282,23 @@ class ReportJobTests(unittest.TestCase):
 
         self.assertEqual(self.requests.uploads, [])
 
+    def test_generate_pdf_is_a_download_even_when_the_definition_does_not_declare_it(self):
+        # The conversion used to happen and then the file was left out of `downloads`: the mail
+        # pointed at the docx alone and the PDF stayed in the volume until the purge.
+        message = self.run_job(generatePDF=True, output=["docx"])
+
+        self.assertEqual([download["extension"] for download in message["downloads"]],
+                         ["docx", "pdf"])
+        self.assertEqual(len(self.requests.uploads), 1)
+        self.assertEqual(message["treatment"]["status"], "Finished")
+
+    def test_the_declared_pdf_is_not_listed_twice(self):
+        message = self.run_job(generatePDF=True, output=["xlsx", "pdf"])
+
+        self.assertEqual([download["extension"] for download in message["downloads"]],
+                         ["xlsx", "pdf"])
+        self.assertEqual(len(self.requests.uploads), 1, "one conversion, whatever is declared")
+
     def test_a_converter_that_refuses_the_file_fails_the_job_with_its_reason(self):
         self.requests.response = FakeResponse(status_code=400, text="invalid form field: files",
                                               content=b"")

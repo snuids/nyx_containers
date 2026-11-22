@@ -61,6 +61,10 @@ VERSION HISTORY
                      which the image never contained and which called a LibreOffice binary that was
                      never installed, so `generatePDF` could not work. A failed conversion now fails
                      the job with its reason instead of leaving it without its PDF.
+* 22 Nov 2026 1.9.35 **AMA** `generatePDF` is a promise: the PDF joins the download list even when the
+                     definition names only its native format. It used to be produced and then left
+                     out of the list, so the mail pointed at the docx alone and the PDF stayed in
+                     the volume until the purge.
 """
 
 import os
@@ -87,7 +91,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.34"
+VERSION="1.9.35"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
@@ -338,9 +342,17 @@ def messageReceivedReport(destination,message,headers):
                 errormessage="Python file "+exec+" crashed. Return code="+str(ret.returncode) 
 
         if errormessage=="":
-            if "generatePDF" in messagejson["report"] and messagejson["report"]["generatePDF"]:
+            outputs=list(messagejson["report"]["output"])
+            if messagejson["report"].get("generatePDF") and "pdf" not in outputs:
+                # `generatePDF` promises a PDF, so the PDF is a download even when the definition
+                # names only its native format. It used to be produced and then left out of the
+                # list, invisible: the user got a mail pointing at the docx alone, and the PDF
+                # sat in the volume until the purge.
+                outputs.append("pdf")
+
+            if messagejson["report"].get("generatePDF"):
                 logger.info("Converting outputs to PDF.")
-                for output in messagejson["report"]["output"]:   
+                for output in outputs:
                     if output=="pdf":
                         continue
 
@@ -358,7 +370,7 @@ def messageReceivedReport(destination,message,headers):
                         break
 
             if errormessage=="":
-                for output in messagejson["report"]["output"]:
+                for output in outputs:
 
                     p2check=messagejson["output"]+"."+output
                     logger.info("Check:"+p2check)
