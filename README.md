@@ -36,7 +36,7 @@ the tests assert on that. No container, no cluster, no broker is needed — the 
 interpreter that has the requirements of `sources/requirements7.txt`.
 
 Coverage is measured by `scripts/ci_test.sh` and gated at 84 % (measured on 2026-11-22: **85,6 %**,
-1 532 of 1 790 statements, 181 tests). Raise the floor as tests land, never lower it. What the suite holds today:
+1 535 of 1 793 statements, 183 tests). Raise the floor as tests land, never lower it. What the suite holds today:
 
 | Module | Coverage | What it pins down |
 | --- | --- | --- |
