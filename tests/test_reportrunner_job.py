@@ -27,6 +27,7 @@ SCENARIO = Harness()
 runner = SCENARIO.load("nyx_reportrunner").module
 
 REPORT_URL = "https://energy.marmar.ovh/generatedreports"
+CONVERTER_URL = "http://nyx_converter:3000"
 
 
 class FakeProcess:
@@ -77,23 +78,32 @@ class FakeSubprocess:
 
 
 class FakeResponse:
-    def __init__(self, status_code=200, text="OK", payload=None):
+    def __init__(self, status_code=200, text="OK", payload=None, content=b"%PDF-1.7\nconverted\n"):
         self.status_code = status_code
         self.text = text
         self._payload = payload if payload is not None else {}
+        self.content = content
 
     def json(self):
         return self._payload
 
 
 class FakeRequests:
-    """Double of the `requests` module: what was posted to the Jasper generator."""
+    """Double of the `requests` module.
+
+    `posts` are the JSON calls to the Jasper generator; `uploads` are the files sent to the
+    converter, kept apart because the two calls do not have the same contract.
+    """
 
     def __init__(self, response=None):
         self.response = response or FakeResponse()
         self.posts = []
+        self.uploads = []
 
-    def post(self, url, json=None, **kwargs):
+    def post(self, url, json=None, files=None, **kwargs):
+        if files is not None:
+            self.uploads.append((url, files, kwargs.get("timeout")))
+            return self.response
         self.posts.append((url, json))
         return self.response
 
@@ -119,6 +129,7 @@ class ReportJobTests(unittest.TestCase):
             "REPORT_URL": REPORT_URL,
             "JASPER_API": "http://jasper:8080/report",
             "DATA_SOURCE_API": "http://energy.marmar.ovh/api/data?name=",
+            "CONVERTER_URL": CONVERTER_URL,
         })
         self.env.start()
         self.addCleanup(self.restore)
@@ -252,13 +263,43 @@ class ReportJobTests(unittest.TestCase):
         self.assertEqual(self.subprocess.popen[-1][0][1], "nyx_buildreport_doc.py")
 
     def test_the_outputs_are_converted_to_pdf_when_the_report_asks(self):
-        self.run_job(generatePDF=True, output=["xlsx", "pdf"])
+        message = self.run_job(generatePDF=True, output=["xlsx", "pdf"])
 
-        self.assertEqual(len(self.subprocess.runs), 1, "the pdf output is not converted again")
-        command, cwd = self.subprocess.runs[0]
-        self.assertEqual(command[0], "./converttopdsf.sh")
-        self.assertTrue(command[1].endswith("id_42.xlsx"))
-        self.assertEqual(cwd, "./shellscripts")
+        self.assertEqual(len(self.requests.uploads), 1, "the pdf output is not converted again")
+        url, files, timeout = self.requests.uploads[0]
+        self.assertEqual(url, CONVERTER_URL + "/forms/libreoffice/convert")
+        self.assertEqual(list(files), ["files"])
+        name, _handle = files["files"]
+        self.assertEqual(name, "id_42.xlsx", "the file is named for the converter, not by path")
+        self.assertEqual(timeout, 180.0)
+        # The PDF the converter answered is written where the runner promises the download.
+        self.assertTrue(os.path.exists(os.path.join(self.directory, "generated", "id_42.pdf")))
+        self.assertEqual(message["treatment"]["status"], "Finished")
+        self.assertIn("pdf", [download["extension"] for download in message["downloads"]])
+
+    def test_a_report_that_already_outputs_pdf_sends_nothing_to_the_converter(self):
+        self.run_job(generatePDF=True, output=["pdf"])
+
+        self.assertEqual(self.requests.uploads, [])
+
+    def test_a_converter_that_refuses_the_file_fails_the_job_with_its_reason(self):
+        self.requests.response = FakeResponse(status_code=400, text="invalid form field: files",
+                                              content=b"")
+
+        message = self.run_job(generatePDF=True, output=["xlsx", "pdf"])
+
+        self.assertEqual(message["treatment"]["status"], "Error")
+        self.assertIn("PDF conversion of id_42.xlsx failed", message["treatment"]["error"])
+        self.assertIn("400", message["treatment"]["error"])
+        self.assertEqual(message["downloads"], [])
+
+    def test_the_converter_is_expected_to_be_configured(self):
+        del os.environ["CONVERTER_URL"]
+
+        message = self.run_job(generatePDF=True, output=["xlsx", "pdf"])
+
+        self.assertEqual(message["treatment"]["status"], "Error")
+        self.assertIn("CONVERTER_URL is not set", message["treatment"]["error"])
 
     # -- jasper ------------------------------------------------------------
     def test_a_jasper_report_posts_its_datasource_and_interval_to_the_generator(self):

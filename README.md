@@ -46,7 +46,7 @@ Coverage is measured by `scripts/ci_test.sh` and gated at 84 % (measured on 2026
 | `nyx_reportscheduler.py` | 91 % | `now-30d` formulas, the UI weekdays to cron, `checkTasks`: due, not due, late, broken, and its `__main__` |
 | `nyx_buildreport.py` | 89 % | the python/xlsx builder: parameters, `#@ONLOAD` cells, the report log |
 | `nyx_monitordocker.py` | 89 % | restart/stop/start of one named container, the `docker_status` documents, the daemon reading at startup |
-| `nyx_reportrunner.py` | 86 % | the job itself: the four report types, the PDF conversion, the downloads, the always-sent step 3 |
+| `nyx_reportrunner.py` | 88 % | the job itself: the four report types, the converter call, the downloads, the always-sent step 3 |
 | `nyx_buildreport_doc.py` | 81 % | the docx builder: placeholders, table cells, the document it writes |
 | `nyx_lambda.py` | 80 % | `loadConfig` (topics, cron, interval, restapi), dispatch, run logs, stats, requirements, the startup |
 
@@ -76,6 +76,19 @@ docker build . -f Dockerfiles/Dockerfilejupylab         -t snuids/nyx_jupylab:vX
 ```
 
 `Dockerfile7` is the same base image without a default command, for a container of your own.
+
+# PDF CONVERSION
+
+The runner converts nothing itself: when a report definition asks for `generatePDF`, it posts each
+rendered output to the converter service named by `CONVERTER_URL` and writes the PDF the answer
+carries (report runner 1.9.34+). That service is
+[Gotenberg](https://gotenberg.dev), `gotenberg/gotenberg:9.9.2-libreoffice` — the variant with the
+LibreOffice it embeds and no Chromium. The file travels in the request body and the PDF comes back
+in the response, so the two containers share no volume and neither needs the other's filesystem.
+
+The report runner image is `python:3.11.3-alpine`: it has never contained LibreOffice, so the
+`shellscripts/converttopdsf.sh` the runner used to call could not work — it is gone. What is left in
+`shellscripts/` is `convert.sh`, the LibreOffice CLI the (unwired) `nyx_formatconverter` uses.
 
 The 2019 images are gone — `Dockerfile`, `Dockerfile_lambda`, `Dockerfileoo2*` and the
 `sources/requirements.txt` they installed (Python 3.7/3.9 bases, Flask 1.0, numpy 1.15): nothing
