@@ -56,6 +56,11 @@ VERSION HISTORY
                      break its own notification instead of saying it had failed.
 * 09 Nov 2026 1.9.32 **AMA** The builders catch `Exception` where a decoding error was caught with
                      `except e:` (a NameError in Python 3) — the branch could not run.
+* 22 Nov 2026 1.9.34 **AMA** The PDF conversion is delegated to the converter service (`CONVERTER_URL`,
+                     Gotenberg + LibreOffice): the runner used to run `shellscripts/converttopdsf.sh`,
+                     which the image never contained and which called a LibreOffice binary that was
+                     never installed, so `generatePDF` could not work. A failed conversion now fails
+                     the job with its reason instead of leaving it without its PDF.
 """
 
 import os
@@ -82,7 +87,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 from opensearchpy import OpenSearch as ES, RequestsHttpConnection as RC
 
 
-VERSION="1.9.32"
+VERSION="1.9.34"
 QUEUE=["/queue/NYX_REPORT_STEP2","/topic/NYX_REPORTRUNNER_COMMAND"]
 
 
@@ -121,6 +126,31 @@ def messageReceivedAddReport(destination,message,headers):
         shutil.copy("./demoreports/demodocx.docx","./reports/notebooks/"+messagejson["notebook"]+".docx")
         os.chmod("./reports/notebooks/"+messagejson["notebook"]+".ipynb",0o666)
         os.chmod("./reports/notebooks/"+messagejson["notebook"]+".docx",0o666)
+
+
+def convert_output_to_pdf(sourcepath):
+    """Ask the converter service for the PDF of one rendered output.
+
+    The conversion is not done here: `CONVERTER_URL` points at a container that only does this
+    (Gotenberg, LibreOffice inside). The file travels in the request body and the PDF comes back in
+    the response, so the runner shares no volume with it and the conversion cannot starve the job.
+
+    Raises on anything that did not produce a PDF — the caller turns that into the job's error.
+    """
+    base=os.environ.get("CONVERTER_URL","").strip()
+    if not base:
+        raise RuntimeError("CONVERTER_URL is not set")
+    url=base.rstrip("/")+"/forms/libreoffice/convert"
+    target=os.path.splitext(sourcepath)[0]+".pdf"
+    timeout=float(os.environ.get("CONVERTER_TIMEOUT","180"))
+    logger.info("Converting %s to PDF through %s" % (sourcepath,url))
+    with open(sourcepath,"rb") as handle:
+        response=requests.post(url,files={"files":(os.path.basename(sourcepath),handle)},timeout=timeout)
+    if response.status_code != 200:
+        raise RuntimeError("converter answered %s: %s" % (response.status_code,(response.text or "")[:300]))
+    with open(target,"wb") as handle:
+        handle.write(response.content)
+    return target
 
 
 def messageReceivedReport(destination,message,headers):
@@ -315,22 +345,30 @@ def messageReceivedReport(destination,message,headers):
                         continue
 
                     p2convert=messagejson["output"]+"."+output
-                    p2convertoutput="/".join(p2convert.split("/")[0:-1])
                     logger.info("Converting:"+p2convert)
-                    subprocess.run(["./converttopdsf.sh",p2convert,p2convertoutput],cwd="./shellscripts")
-                    logger.info("PDF done")
+                    try:
+                        convert_output_to_pdf(p2convert)
+                        logger.info("PDF done")
+                    except Exception as exc:
+                        # No PDF, no report: the file is one of the downloads the user asked for, and
+                        # a job that says "Finished" without it is worse than one that says why.
+                        logger.error("PDF conversion failed: %s" % exc)
+                        status="Error"
+                        errormessage="PDF conversion of "+os.path.basename(p2convert)+" failed: "+str(exc)
+                        break
 
-            for output in messagejson["report"]["output"]:
-                
-                p2check=messagejson["output"]+"."+output
-                logger.info("Check:"+p2check)
-                if not os.path.exists(p2check):
-                    logger.error("Output file "+p2check+" does not exist. Check the runner logs.")
-                    status="Error"
-                    errormessage="Output file "+p2check+" does not exist. Check the runner logs."
-                    break
-                
-                webs.append({"extension":output,"url":os.environ["REPORT_URL"]+"/"+messagejson["id"]+"."+output})
+            if errormessage=="":
+                for output in messagejson["report"]["output"]:
+
+                    p2check=messagejson["output"]+"."+output
+                    logger.info("Check:"+p2check)
+                    if not os.path.exists(p2check):
+                        logger.error("Output file "+p2check+" does not exist. Check the runner logs.")
+                        status="Error"
+                        errormessage="Output file "+p2check+" does not exist. Check the runner logs."
+                        break
+
+                    webs.append({"extension":output,"url":os.environ["REPORT_URL"]+"/"+messagejson["id"]+"."+output})
 
     messagejson["downloads"]=webs
 
