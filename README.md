@@ -1,11 +1,11 @@
 # NYX Containers
 
-![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/snuids/nyx_containers/badges/coverage.json&style=flat-square)
-![CI](https://img.shields.io/github/actions/workflow/status/snuids/nyx_containers/ci-requirements7.yml?style=flat-square&label=tests)
+![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Indian-Runners/nyx_containers/badges/coverage.json&style=flat-square)
+![CI](https://img.shields.io/github/actions/workflow/status/Indian-Runners/nyx_containers/ci-requirements7.yml?style=flat-square&label=tests)
 
 ![badge](https://img.shields.io/badge/made%20with-python-blue.svg?style=flat-square)
-![badge](https://img.shields.io/github/languages/code-size/snuids/nyx_containers)
-![badge](https://img.shields.io/github/last-commit/snuids/nyx_containers)
+![badge](https://img.shields.io/github/languages/code-size/Indian-Runners/nyx_containers)
+![badge](https://img.shields.io/github/last-commit/Indian-Runners/nyx_containers)
 
 NYX Containers provide the code (via the container skeleton) to build a container that can :
 * Interact with the 2 databases (Read and/or Write), PostgreSQL and Elasticsearch 
